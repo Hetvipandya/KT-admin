@@ -20,6 +20,10 @@ export default function Employees() {
     email: "",
     mobile: "",
     designation: "",
+    department: "",
+    dob: "",        // Changed from dateOfBirth to dob
+    address: "",
+    bloodGroup: "",
   });
 
   useEffect(() => {
@@ -50,11 +54,15 @@ export default function Employees() {
         ? `https://kt-backend-1.onrender.com/api/employee/remove-tl/${employeeId}`
         : `https://kt-backend-1.onrender.com/api/employee/assign-tl/${employeeId}`;
 
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       const res = await fetch(url, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
       });
 
       const data = await res.json();
@@ -128,6 +136,10 @@ export default function Employees() {
           email: "",
           mobile: "",
           designation: "",
+          department: "",
+          dob: "",
+          address: "",
+          bloodGroup: "",
         });
         fetchEmployees();
       } else {
@@ -185,6 +197,10 @@ export default function Employees() {
                     email: "",
                     mobile: "",
                     designation: "",
+                    department: "",
+                    dob: "",
+                    address: "",
+                    bloodGroup: "",
                   });
                   setShowModal(true);
                 }}
@@ -291,7 +307,6 @@ export default function Employees() {
                         <th className="px-4 py-3 text-left">#</th>
                         <th className="px-4 py-3 text-left">Employee</th>
                         <th className="px-4 py-3 text-left">Email</th>
-                        <th className="px-4 py-3 text-left">Department</th>
                         <th className="px-4 py-3 text-left">Designation</th>
                         <th className="px-4 py-3 text-left">Status</th>
                         <th className="px-4 py-3 text-left">Role</th>
@@ -322,12 +337,6 @@ export default function Employees() {
                               <Mail className="h-3.5 w-3.5 flex-shrink-0" />
                               <span className="truncate">{emp.email}</span>
                             </a>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="flex items-center gap-1.5 text-gray-700">
-                              <Building className="h-3.5 w-3.5 text-gray-400" />
-                              {emp.department?.departmentName || emp.departmentName || "N/A"}
-                            </span>
                           </td>
                           <td className="px-4 py-3">
                             <span className="flex items-center gap-1.5 text-gray-700">
@@ -521,27 +530,30 @@ export default function Employees() {
 
       {/* Modal - Add Employee */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          
-          <div className="relative w-full max-w-lg overflow-hidden border border-gray-200 bg-white p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Add Employee</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Add a new employee to the system</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div 
+            className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white shadow-xl animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Add Employee</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Add a new employee to the system</p>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors rounded-lg"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
             </div>
 
-            <form onSubmit={handleAddEmployee} className="mt-5 space-y-4">
+            <form onSubmit={handleAddEmployee} className="px-6 py-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     First Name *
                   </label>
                   <input
@@ -550,11 +562,11 @@ export default function Employees() {
                     value={formData.firstName}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Last Name *
                   </label>
                   <input
@@ -563,13 +575,13 @@ export default function Employees() {
                     value={formData.lastName}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Email *
                 </label>
                 <input
@@ -579,12 +591,12 @@ export default function Employees() {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Mobile Number *
                 </label>
                 <input
@@ -593,12 +605,12 @@ export default function Employees() {
                   value={formData.mobile}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Designation *
                 </label>
                 <input
@@ -607,21 +619,81 @@ export default function Employees() {
                   value={formData.designation}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                 />
               </div>
 
-              <div className="flex gap-3 pt-2 border-t border-gray-100">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Department *
+                </label>
+                <input
+                  type="text"
+                  name="department"
+                  placeholder="e.g. IT, HR, Sales"
+                  value={formData.department}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Date of Birth *
+                </label>
+                <input
+                  type="text"
+                  name="dob"  // Changed from dateOfBirth to dob
+                  placeholder="e.g. 1990-01-01"
+                  value={formData.dob}  // Changed from dateOfBirth to dob
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Address *
+                </label>
+                <input
+                  type="text"
+                  name="address"
+                  placeholder="e.g. 123 Main St, City, State"
+                  value={formData.address}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Blood Group *
+                </label>
+                <input
+                  type="text"
+                  name="bloodGroup"
+                  placeholder="e.g. A+, O-, etc."
+                  value={formData.bloodGroup}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-100 sticky bottom-0 bg-white pb-2">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors rounded-lg"
                 >
                   Add Employee
                 </button>

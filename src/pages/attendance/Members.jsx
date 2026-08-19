@@ -21,7 +21,10 @@ import {
   Smile,
   Star,
   Building2,
-  BadgeCheck
+  BadgeCheck,
+  Loader2,
+  FolderOpen,
+  FileText
 } from 'lucide-react';
 
 const avatarColors = [
@@ -46,7 +49,7 @@ const getInitials = (name) => {
 
 const getStatusStyle = (status) => {
   const normalizedStatus = (status || '').toLowerCase();
-  
+   
   const statusMap = {
     'active': { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400', label: 'Active' },
     'active now': { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400', label: 'Active Now' },
@@ -144,6 +147,109 @@ const isAttendanceMatch = (member, record) => {
   return memberName === recordName || recordName.includes(memberName) || memberName.includes(recordName);
 };
 
+const PROJECT_API_BASE = 'https://kt-backend-1.onrender.com/api/projectManage';
+
+const normalizeArrayPayload = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.projects)) return payload.projects;
+  if (Array.isArray(payload.tasks)) return payload.tasks;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.dailyUpdates)) return payload.dailyUpdates;
+  if (Array.isArray(payload.updates)) return payload.updates;
+  return [];
+};
+
+const getMemberIdentityValues = (member = {}) => {
+  const candidates = [
+    member?.id,
+    member?._id,
+    member?.employeeId,
+    member?.userId,
+    member?.email,
+  ].filter(Boolean);
+
+  return candidates
+    .map((value) => String(value).trim().toLowerCase())
+    .filter(Boolean);
+};
+
+const hasMemberMatch = (value, member) => {
+  if (!value || !member) return false;
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasMemberMatch(item, member));
+  }
+
+  const memberIds = getMemberIdentityValues(member);
+
+  if (typeof value === 'object') {
+    const objectIds = [
+      value?._id,
+      value?.id,
+      value?.userId,
+      value?.employeeId,
+      value?.userID,
+    ]
+      .filter(Boolean)
+      .map((id) => String(id).trim().toLowerCase());
+
+    return objectIds.some((id) => memberIds.includes(id));
+  }
+
+  const valueId = String(value).trim().toLowerCase();
+
+  return memberIds.includes(valueId);
+};
+
+const projectMatchesMember = (project, member) => {
+  if (!project || !member) return false;
+
+  const fields = [
+    // Team Lead
+    project?.teamLeadUser,
+    project?.teamLeadEmployee,
+    project?.teamLead,
+
+    // Members
+    project?.employees,
+    project?.interns,
+
+    // Other possible fields
+    project?.assignedEmployee,
+    project?.assignedTL,
+    project?.assignedIntern,
+    project?.createdBy,
+    project?.projectLead,
+    project?.members,
+    project?.projectMembers,
+    project?.assignedTo,
+    project?.employee,
+    project?.user
+  ];
+
+  return fields.some((field) => hasMemberMatch(field, member));
+};
+
+const taskMatchesMember = (task, member) => {
+  if (!task || !member) return false;
+
+  const fields = [
+    task?.assignedTo,
+    task?.assignedEmployee,
+    task?.assignedIntern,
+    task?.assignedTeamLeadUser,
+    task?.assignedTeamLeadEmployee,
+    task?.employee,
+    task?.user,
+    task?.assignedUser,
+    task?.assignee
+  ];
+
+  return fields.some((field) => hasMemberMatch(field, member));
+};
+
 export default function Members() {
   const [members, setMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
@@ -155,6 +261,8 @@ export default function Members() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [attendanceStatusMap, setAttendanceStatusMap] = useState({});
+  const [memberInsights, setMemberInsights] = useState({ projects: [], tasks: [], dailyUpdates: [] });
+  const [memberInsightsLoading, setMemberInsightsLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -167,23 +275,12 @@ export default function Members() {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [usersRes, teamLeadRes, employeeRes] = await Promise.all([
-          fetch('https://kt-backend-1.onrender.com/api/users/all', { headers }),
-          fetch('https://kt-backend-1.onrender.com/api/teamLead/team', { headers }),
-          fetch('https://kt-backend-1.onrender.com/api/employee/list', { headers })
-        ]);
+        const usersRes = await fetch('https://kt-backend-1.onrender.com/api/users/all', { headers });
 
         if (!usersRes.ok) throw new Error('Failed to fetch users');
-        if (!teamLeadRes.ok) throw new Error('Failed to fetch team leads');
-        if (!employeeRes.ok) throw new Error('Failed to fetch employees');
 
         const usersData = await usersRes.json();
-        const teamLeadData = await teamLeadRes.json();
-        const employeeData = await employeeRes.json();
-
         const usersList = usersData?.users || usersData?.data || usersData || [];
-        const teamLeadsList = teamLeadData?.teamLeads || teamLeadData?.data || teamLeadData || [];
-        const employeesList = employeeData?.employees || employeeData?.data || employeeData || [];
 
         const formatDate = (dateStr) => {
           if (!dateStr) return 'N/A';
@@ -191,16 +288,47 @@ export default function Members() {
           return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-GB');
         };
 
-        const interns = usersList
-          .filter(user => {
-            const role = String(user?.role || '').toLowerCase();
-            return role === 'intern';
+        const allMembers = usersList
+          .filter((user) => {
+            const role = String(user?.role || user?.userRole || '').toLowerCase().trim();
+            return role && role !== 'admin';
           })
           .map((user, index) => {
-            const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'Unnamed Intern';
+            const role = String(user?.role || user?.userRole || '').toLowerCase().trim();
+            const roleType = role === 'intern'
+              ? 'intern'
+              : role === 'teamlead' || role === 'team lead' || role === 'team_lead' || role === 'tl'
+              ? 'tl'
+              : 'employee';
+
+            const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'Unnamed User';
+
+            let designation = roleType === 'intern'
+              ? 'Intern'
+              : roleType === 'tl'
+              ? 'Team Lead'
+              : 'Employee';
+
+            if (typeof user?.designation === 'object' && user?.designation?.designationName) {
+              designation = user.designation.designationName;
+            } else if (user?.designationName) {
+              designation = user.designationName;
+            } else if (user?.designation) {
+              designation = typeof user.designation === 'string' ? user.designation : designation;
+            }
+
+            let department = 'Unassigned';
+            if (typeof user?.department === 'object' && user?.department?.departmentName) {
+              department = user.department.departmentName;
+            } else if (user?.departmentName) {
+              department = user.departmentName;
+            } else if (user?.department) {
+              department = typeof user.department === 'string' ? user.department : 'Unassigned';
+            }
+
             return {
-              id: user?._id || user?.id || `intern-${index}`,
-              employeeId: user?.employeeID || user?.employeeId || `INT${String(index + 1).padStart(4, '0')}`,
+              id: user?._id || user?.id || `${roleType}-${index}`,
+              employeeId: user?.employeeID || user?.employeeId || `${roleType.toUpperCase()}${String(index + 1).padStart(4, '0')}`,
               name: fullName,
               email: user?.email || 'No email',
               mobile: user?.mobile || 'N/A',
@@ -209,97 +337,17 @@ export default function Members() {
               bloodGroup: user?.bloodGroup || 'N/A',
               currentAddress: user?.currentAddress || 'N/A',
               permanentAddress: user?.permanentAddress || 'N/A',
-              designation: 'Intern',
-              department: user?.department?.departmentName || user?.departmentName || 'Unassigned',
+              designation,
+              department,
               status: user?.employeeStatus || user?.status || 'Active',
               currentAction: user?.currentAction || 'Available',
               skills: Array.isArray(user?.skills) ? user.skills : [],
               initials: getInitials(fullName),
               avatarColor: getAvatarColor(index),
               joiningDate: formatDate(user?.joiningDate),
-              roleType: 'intern'
+              roleType
             };
           });
-
-        const teamLeads = teamLeadsList
-          .map((lead, index) => {
-            const leadUser = lead?.teamLead || lead?.user || lead;
-            const fullName = [leadUser?.firstName, leadUser?.lastName].filter(Boolean).join(' ') 
-              || leadUser?.name || lead?.name || 'Unnamed TL';
-            
-            return {
-              id: lead?._id || leadUser?._id || lead?.teamLeadId || `tl-${index}`,
-              employeeId: leadUser?.employeeID || leadUser?.employeeId || lead?.employeeID || `TL${String(index + 1).padStart(4, '0')}`,
-              name: fullName,
-              email: leadUser?.email || lead?.email || 'No email',
-              mobile: leadUser?.mobile || lead?.mobile || 'N/A',
-              gender: leadUser?.gender || 'N/A',
-              dob: formatDate(leadUser?.dob || leadUser?.dateOfBirth),
-              bloodGroup: leadUser?.bloodGroup || 'N/A',
-              currentAddress: leadUser?.currentAddress || lead?.currentAddress || 'N/A',
-              permanentAddress: leadUser?.permanentAddress || lead?.permanentAddress || 'N/A',
-              designation: 'Team Lead',
-              department: lead?.department?.departmentName || leadUser?.department?.departmentName || leadUser?.departmentName || 'Unassigned',
-              status: lead?.status || leadUser?.employeeStatus || 'Active',
-              currentAction: lead?.currentAction || leadUser?.currentAction || 'Available',
-              skills: Array.isArray(leadUser?.skills) ? leadUser.skills : [],
-              initials: getInitials(fullName),
-              avatarColor: getAvatarColor(index + interns.length),
-              joiningDate: formatDate(leadUser?.joiningDate || lead?.joiningDate),
-              roleType: 'tl'
-            };
-          });
-
-        const employees = employeesList
-          .filter(emp => {
-            const isTeamLead = emp?.isTeamlead ?? emp?.isTeamLead ?? true;
-            return isTeamLead === false || isTeamLead === 'false' || isTeamLead === 0 || isTeamLead === '0';
-          })
-          .map((emp, index) => {
-            const fullName = [emp?.firstName, emp?.lastName].filter(Boolean).join(' ') || emp?.name || 'Unnamed Employee';
-            
-            let designation = 'Employee';
-            if (typeof emp?.designation === 'object' && emp?.designation?.designationName) {
-              designation = emp.designation.designationName;
-            } else if (emp?.designationName) {
-              designation = emp.designationName;
-            } else if (emp?.designation) {
-              designation = typeof emp.designation === 'string' ? emp.designation : 'Employee';
-            }
-
-            let department = 'Unassigned';
-            if (typeof emp?.department === 'object' && emp?.department?.departmentName) {
-              department = emp.department.departmentName;
-            } else if (emp?.departmentName) {
-              department = emp.departmentName;
-            } else if (emp?.department) {
-              department = typeof emp.department === 'string' ? emp.department : 'Unassigned';
-            }
-
-            return {
-              id: emp?._id || emp?.id || `emp-${index}`,
-              employeeId: emp?.employeeID || emp?.employeeId || `EMP${String(index + 1).padStart(4, '0')}`,
-              name: fullName,
-              email: emp?.email || 'No email',
-              mobile: emp?.mobile || 'N/A',
-              gender: emp?.gender || 'N/A',
-              dob: formatDate(emp?.dob || emp?.dateOfBirth),
-              bloodGroup: emp?.bloodGroup || 'N/A',
-              currentAddress: emp?.currentAddress || 'N/A',
-              permanentAddress: emp?.permanentAddress || 'N/A',
-              designation: designation,
-              department: department,
-              status: emp?.employeeStatus || emp?.status || 'Active',
-              currentAction: emp?.currentAction || 'Available',
-              skills: Array.isArray(emp?.skills) ? emp.skills : [],
-              initials: getInitials(fullName),
-              avatarColor: getAvatarColor(index + interns.length + teamLeads.length),
-              joiningDate: formatDate(emp?.joiningDate),
-              roleType: 'employee'
-            };
-          });
-
-        const allMembers = [...interns, ...teamLeads, ...employees];
         
         if (isMounted) {
           setMembers(allMembers);
@@ -400,9 +448,129 @@ export default function Members() {
     setFilteredMembers(filtered);
   }, [searchTerm, selectedRole, selectedStatus, members]);
 
-  const handleMemberClick = (member) => {
+  const resolveTeamMemberDetails = async (memberIds, allMembers, token) => {
+  if (!Array.isArray(memberIds) || memberIds.length === 0) {
+    return [];
+  }
+
+  return memberIds
+    .map((id) => {
+      if (!id) return null;
+
+      const projectMemberId = String(
+        id?._id ||
+        id?.id ||
+        id?.userId ||
+        id?.userID ||
+        id
+      )
+        .trim()
+        .toLowerCase();
+
+      return allMembers.find((member) => {
+        const memberIds = [
+          member?.id,
+          member?._id,
+          member?.userId,
+          member?.employeeId
+        ]
+          .filter(Boolean)
+          .map((x) => String(x).trim().toLowerCase());
+
+        return memberIds.includes(projectMemberId);
+      });
+    })
+    .filter(Boolean);
+};
+
+  const handleMemberClick = async (member) => {
     setSelectedMember(member);
     setShowDetailModal(true);
+    setMemberInsightsLoading(true);
+    setMemberInsights({ projects: [], tasks: [], dailyUpdates: [] });
+
+    const memberIdentifier = member?.id || member?.employeeId || member?.email || member?.name || '';
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    try {
+      const projectsPromise = fetch(
+        `${PROJECT_API_BASE}/project/all`,
+        { headers }
+      ).then(async (response) => {
+        if (!response.ok) return [];
+
+        const payload = await response.json();
+
+        return normalizeArrayPayload(payload)
+          .filter((project) => projectMatchesMember(project, member));
+      });
+
+      const tasksPromise = memberIdentifier
+        ? fetch(`${PROJECT_API_BASE}/task/employee/${encodeURIComponent(memberIdentifier)}`, { headers }).then(async (response) => {
+            if (!response.ok) return [];
+            const payload = await response.json();
+            return normalizeArrayPayload(payload).filter((task) => taskMatchesMember(task, member));
+          })
+        : Promise.resolve([]);
+
+      const [projects, tasks] = await Promise.all([projectsPromise, tasksPromise]);
+
+      const enrichedProjects = await Promise.all(
+        projects.map(async (project) => {
+          const tlIds = Array.isArray(project?.teamLead) ? project.teamLead : project?.teamLead ? [project.teamLead] : [];
+          const empIds = Array.isArray(project?.employees) ? project.employees : project?.employees ? [project.employees] : [];
+          const internIds = Array.isArray(project?.interns) ? project.interns : project?.interns ? [project.interns] : [];
+
+          const teamLeads = await resolveTeamMemberDetails(tlIds, members, token);
+          const employees = await resolveTeamMemberDetails(empIds, members, token);
+          const interns = await resolveTeamMemberDetails(internIds, members, token);
+
+          return {
+            ...project,
+            resolvedTeamLeads: teamLeads,
+            resolvedEmployees: employees,
+            resolvedInterns: interns
+          };
+        })
+      );
+
+      const dailyUpdates = [];
+      if (tasks.length) {
+        const updateResults = await Promise.all(tasks.map(async (task) => {
+          const taskId = task?._id || task?.id || task?.taskId;
+          if (!taskId) return [];
+
+          try {
+            const response = await fetch(`${PROJECT_API_BASE}/daily-update/${taskId}`, { headers });
+            if (!response.ok) return [];
+            const payload = await response.json();
+            return normalizeArrayPayload(payload).map((update) => ({
+              ...update,
+              taskTitle: task?.taskTitle || task?.title || 'Task'
+            }));
+          } catch (err) {
+            console.error('❌ Error fetching project updates:', err);
+            return [];
+          }
+        }));
+
+        updateResults.forEach((updates) => dailyUpdates.push(...updates));
+      }
+
+      setMemberInsights({
+        projects: enrichedProjects.slice(0, 5),
+        tasks: tasks.slice(0, 5),
+        dailyUpdates: dailyUpdates
+          .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0))
+          .slice(0, 5)
+      });
+    } catch (err) {
+      console.error('❌ Error fetching member project insights:', err);
+      setMemberInsights({ projects: [], tasks: [], dailyUpdates: [] });
+    } finally {
+      setMemberInsightsLoading(false);
+    }
   };
 
   const roles = ['all', ...new Set(members.map(m => m.roleType))];
@@ -612,7 +780,11 @@ export default function Members() {
                 </div>
               </div>
               <button
-                onClick={() => setShowDetailModal(false)}
+                onClick={() => {
+                  setShowDetailModal(false);
+                  setSelectedMember(null);
+                  setMemberInsights({ projects: [], tasks: [], dailyUpdates: [] });
+                }}
                 className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex-shrink-0"
               >
                 <X className="w-4 h-4" />
@@ -738,6 +910,128 @@ export default function Members() {
                   </div>
                 </div>
               )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 pt-1">
+                <div className="border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <FolderOpen className="w-3.5 h-3.5 text-indigo-500" />
+                    <h3 className="text-[11px] font-bold text-slate-800">Assigned Projects</h3>
+                  </div>
+
+                  {memberInsightsLoading ? (
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Loading projects...
+                    </div>
+                  ) : memberInsights.projects.length > 0 ? (
+                    <ul className="space-y-2.5">
+                      {memberInsights.projects.map((project, idx) => (
+                        <li key={project?._id || project?.id || idx} className="text-[11px] text-slate-700 border border-slate-300 p-2 bg-white">
+                          <div className="font-medium truncate mb-1.5">{project?.projectName || project?.name || 'Untitled Project'}</div>
+                          <div className="text-[10px] text-slate-500 mb-1.5">{project?.status || 'In progress'} • Budget: {project?.projectBudget || 'N/A'}</div>
+                          
+                          {/* Team Leads */}
+                          {project?.resolvedTeamLeads && project.resolvedTeamLeads.length > 0 && (
+                            <div className="mb-1.5 pb-1.5 border-b border-slate-200">
+                              <div className="text-[9px] font-semibold text-amber-700 mb-1">Team Leads:</div>
+                              <div className="flex flex-wrap gap-1">
+                                {project.resolvedTeamLeads.map((tl) => (
+                                  <span key={tl?.id} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[9px] font-medium border border-amber-200">
+                                    <Star className="w-2.5 h-2.5" />
+                                    {tl?.name || 'TL'}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Employees */}
+                          {project?.resolvedEmployees && project.resolvedEmployees.length > 0 && (
+                            <div className="mb-1.5 pb-1.5 border-b border-slate-200">
+                              <div className="text-[9px] font-semibold text-blue-700 mb-1">Employees:</div>
+                              <div className="flex flex-wrap gap-1">
+                                {project.resolvedEmployees.map((emp) => (
+                                  <span key={emp?.id} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[9px] font-medium border border-blue-200">
+                                    <Building2 className="w-2.5 h-2.5" />
+                                    {emp?.name || 'Employee'}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Interns */}
+                          {project?.resolvedInterns && project.resolvedInterns.length > 0 && (
+                            <div>
+                              <div className="text-[9px] font-semibold text-violet-700 mb-1">Interns:</div>
+                              <div className="flex flex-wrap gap-1">
+                                {project.resolvedInterns.map((intern) => (
+                                  <span key={intern?.id} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-50 text-violet-700 text-[9px] font-medium border border-violet-200">
+                                    <BookOpen className="w-2.5 h-2.5" />
+                                    {intern?.name || 'Intern'}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">No assigned projects found.</p>
+                  )}
+                </div>
+
+                <div className="border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                    <h3 className="text-[11px] font-bold text-slate-800">Assigned Tasks</h3>
+                  </div>
+
+                  {memberInsightsLoading ? (
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Loading tasks...
+                    </div>
+                  ) : memberInsights.tasks.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {memberInsights.tasks.map((task, idx) => (
+                        <li key={task?._id || task?.id || idx} className="text-[11px] text-slate-700">
+                          <div className="font-medium truncate">{task?.taskTitle || task?.title || 'Untitled Task'}</div>
+                          <div className="text-[10px] text-slate-500">{task?.status || 'Pending'} • {task?.progress || 0}%</div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">No assigned tasks found.</p>
+                  )}
+                </div>
+
+                <div className="border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                    <h3 className="text-[11px] font-bold text-slate-800">Daily Reports</h3>
+                  </div>
+
+                  {memberInsightsLoading ? (
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Loading reports...
+                    </div>
+                  ) : memberInsights.dailyUpdates.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {memberInsights.dailyUpdates.map((update, idx) => (
+                        <li key={update?._id || update?.id || idx} className="text-[11px] text-slate-700">
+                          <div className="font-medium truncate">{update?.taskTitle || 'Task update'}</div>
+                          <div className="text-[10px] text-slate-500">{update?.message || update?.description || 'No details provided'}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">No daily reports found.</p>
+                  )}
+                </div>
+              </div>
 
             </div>
           </div>

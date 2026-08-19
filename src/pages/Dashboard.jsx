@@ -1,103 +1,29 @@
-import React, { useEffect, useState } from "react";
-import {
-  Users,
-  UserCheck,
-  Briefcase,
-  Calendar,
-  Clock,
-  Cake,
-  Sparkles,
-  CheckCircle2,
-  AlertCircle,
-  FolderGit2,
-  Search,
-  X,
-  UserX,
-  ChevronRight,
-  TrendingUp,
-  FileText,
-  AlertTriangle,
-  Clock3,
-  Megaphone,
-  Bell,
-  Plus,
-  Edit3,
-  Trash2
-} from "lucide-react";
+  import React, { useEffect, useState } from "react";
+  import {
+    Users,
+    UserCheck,
+    Briefcase,
+    Calendar,
+    Clock,
+    Cake,
+    Sparkles,
+    CheckCircle2,
+    AlertCircle,
+    X,
+    UserX,
+    ChevronRight,
+    Bell,
+    Plus,
+    Edit3,
+    Trash2
+  } from "lucide-react";
 
-export default function Dashboard() {
-  const [stats, setStats] = useState([
-    {
-      id: 1,
-      name: "Total Employees",
-      value: 0,
-      icon: Users,
-      badge: "Full-Time",
-      accent: "indigo",
-    },
-    {
-      id: 2,
-      name: "Total Interns",
-      value: 0,
-      icon: UserCheck,
-      badge: "Trainees",
-      accent: "amber",
-    },
-    {
-      id: 3,
-      name: "Total Team Leads",
-      value: 0,
-      icon: Briefcase,
-      badge: "Management",
-      accent: "purple",
-    },
-  ]);
-
-  const [leaves, setLeaves] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [showAbsentModal, setShowAbsentModal] = useState(false);
-  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
-  const [selectedLeave, setSelectedLeave] = useState(null);
-  const [selectedStatus, setSelectedStatus] = useState("");
-  const [upcomingHolidays, setUpcomingHolidays] = useState([]);
-  const [birthdays, setBirthdays] = useState([]);
-  const [absentRecords, setAbsentRecords] = useState([]);
-  const [dailyUpdates, setDailyUpdates] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-  const [dashboardCounts, setDashboardCounts] = useState({
-    employeeCount: 0,
-    internCount: 0,
-    teamLeadCount: 0,
-  });
-  const [expandedUpdateId, setExpandedUpdateId] = useState(null);
-  const [announcements, setAnnouncements] = useState([]);
-  const [showAllAnnouncements, setShowAllAnnouncements] = useState(false);
-
-  // Announcement form state
-  const [announcementForm, setAnnouncementForm] = useState({
-    title: "",
-    message: "",
-    type: "ANNOUNCEMENT"
-  });
-  const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
-
-  useEffect(() => {
-    fetchUsers();
-    fetchTeamLeads();
-    fetchLeaves();
-    fetchHolidays();
-    fetchAbsentAttendance();
-    fetchDailyUpdates();
-    fetchAnnouncements();
-  }, []);
-
-  useEffect(() => {
-    setStats([
+  export default function Dashboard() {
+    const [stats, setStats] = useState([
       {
         id: 1,
         name: "Total Employees",
-        value: dashboardCounts.employeeCount,
+        value: 0,
         icon: Users,
         badge: "Full-Time",
         accent: "indigo",
@@ -105,7 +31,7 @@ export default function Dashboard() {
       {
         id: 2,
         name: "Total Interns",
-        value: dashboardCounts.internCount,
+        value: 0,
         icon: UserCheck,
         badge: "Trainees",
         accent: "amber",
@@ -113,492 +39,736 @@ export default function Dashboard() {
       {
         id: 3,
         name: "Total Team Leads",
-        value: dashboardCounts.teamLeadCount,
+        value: 0,
         icon: Briefcase,
         badge: "Management",
         accent: "purple",
       },
     ]);
-  }, [dashboardCounts.employeeCount, dashboardCounts.internCount, dashboardCounts.teamLeadCount]);
 
-  async function fetchUsers() {
-    try {
-      const response = await fetch("https://kt-backend-1.onrender.com/api/users/all");
-      const data = await response.json();
-      const users = data.users || data.data || [];
 
-      const employeeCount = users.filter((user) => user.role?.toLowerCase() === "employee").length;
-      const internCount = users.filter((user) => user.role?.toLowerCase() === "intern").length;
-
-      const formattedBirthdays = users
-        .map((user) => ({
-          id: user._id || user.id,
-          name: user.name || user.fullName || "N/A",
-          role: user.role || "N/A",
-          dob: user.dob || user.dateOfBirth || user.birthDate || user.birthday || null,
-        }))
-        .filter((user) => user.dob && isBirthdayInCurrentMonth(user.dob))
-        .sort((a, b) => new Date(a.dob) - new Date(b.dob));
-
-      setBirthdays(formattedBirthdays);
-      setDashboardCounts((prev) => ({
-        ...prev,
-        employeeCount,
-        internCount,
-      }));
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function fetchTeamLeads() {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("https://kt-backend-1.onrender.com/api/teamLead/team", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      const teamLeads = data.teamLeads || data.data || data.teamlead || data.teams || [];
-
-      setDashboardCounts((prev) => ({
-        ...prev,
-        teamLeadCount: Array.isArray(teamLeads) ? teamLeads.length : 0,
-      }));
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function fetchLeaves() {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("https://kt-backend-1.onrender.com/api/leave/all", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      let leaveArray = Array.isArray(data) ? data : data.leaves || data.data || [];
-
-      const hrApprovedLeaves = leaveArray.filter(
-        (leave) => leave.hrStatus?.toLowerCase() === "approved"
-      );
-      setLeaves(hrApprovedLeaves);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function fetchHolidays() {
-    try {
-      const response = await fetch("https://kt-backend-1.onrender.com/api/holiday/current-month");
-      const data = await response.json();
-      let holidays = Array.isArray(data) ? data : data.holidays || data.data || [];
-
-      if (!Array.isArray(holidays) && typeof data === "object") {
-        const possibleArrays = [data.holiday, data.currentMonthHolidays, data.result];
-        holidays = possibleArrays.find(Array.isArray) || [];
-      }
-
-      const formatted = holidays.map((holiday) => ({
-        id: holiday._id || holiday.id,
-        name: holiday.holidayName || holiday.name || "Holiday",
-        date: formatHolidayDate(holiday.holidayDate || holiday.date),
-      }));
-
-      setUpcomingHolidays(formatted);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function fetchAbsentAttendance() {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("https://kt-backend-1.onrender.com/api/attendance/admin/all", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      let attendanceData = Array.isArray(data) ? data : data.attendance || data.data || [];
-
-      const absentOnly = attendanceData.filter(
-        (record) => record.status?.toLowerCase() === "absent"
-      );
-      setAbsentRecords(absentOnly);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function fetchDailyUpdates() {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("https://kt-backend-1.onrender.com/api/dailyUpdate/list", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      let updates = Array.isArray(data) ? data : data.dailyUpdates || data.data || data.updates || [];
-
-      const sortedUpdates = [...updates].sort((a, b) => {
-        const dateA = new Date(a.reportDate || a.createdAt || 0).getTime();
-        const dateB = new Date(b.reportDate || b.createdAt || 0).getTime();
-        return dateB - dateA;
-      });
-
-      setDailyUpdates(sortedUpdates);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  // Fetch announcements from API
-  async function fetchAnnouncements() {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("https://kt-backend-1.onrender.com/api/notification/announcement/all", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      
-      let announcementsList = [];
-      if (Array.isArray(data)) {
-        announcementsList = data;
-      } else if (data.data && Array.isArray(data.data)) {
-        announcementsList = data.data;
-      } else if (data.announcements && Array.isArray(data.announcements)) {
-        announcementsList = data.announcements;
-      }
-      
-      // Sort by createdAt descending (newest first)
-      const sortedAnnouncements = announcementsList
-        .filter(item => item.title && item.message)
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      
-      setAnnouncements(sortedAnnouncements);
-    } catch (error) {
-      console.error("Error fetching announcements:", error);
-    }
-  }
-
-  const updateLeaveStatus = async (leaveId, status) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("https://kt-backend-1.onrender.com/api/leave/admin-approval", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ leaveId, status }),
-      });
-      const data = await response.json();
-      if (data.success) fetchLeaves();
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const confirmAction = async () => {
-    await updateLeaveStatus(selectedLeave, selectedStatus);
-    setShowModal(false);
-  };
-
-  // Handle announcement submission
-  const handleAnnouncementSubmit = async () => {
-    if (!announcementForm.title.trim() || !announcementForm.message.trim()) {
-      alert("Please fill both title and message before posting.");
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem("token");
-      const payload = {
-        title: announcementForm.title.trim(),
-        message: announcementForm.message.trim(),
-        type: announcementForm.type || "ANNOUNCEMENT",
-      };
-
-      const endpoint = editingAnnouncementId
-        ? `https://kt-backend-1.onrender.com/api/notification/announcement/${editingAnnouncementId}`
-        : "https://kt-backend-1.onrender.com/api/notification/announcement/create";
-      const method = editingAnnouncementId ? "PUT" : "POST";
-      const bodyPayload = payload;
-
-      const response = await fetch(endpoint, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(bodyPayload),
-      });
-
-      const data = await response.json().catch(() => null);
-      const success = response.ok && (data?.success || data?.message || data?.data);
-      if (success) {
-        setAnnouncementForm({
-          title: "",
-          message: "",
-          type: "ANNOUNCEMENT",
-        });
-        setEditingAnnouncementId(null);
-        setShowAnnouncementModal(false);
-        await fetchAnnouncements();
-        alert(editingAnnouncementId ? "Announcement updated successfully!" : "Announcement posted successfully!");
-      } else {
-        alert(data?.message || "Failed to save announcement. Please try again.");
-      }
-    } catch (error) {
-      console.error("Error posting announcement:", error);
-      alert("Error posting announcement. Please try again.");
-    }
-  };
-
-  const handleAnnouncementEdit = (announcement) => {
-    setAnnouncementForm({
-      title: announcement.title || "",
-      message: announcement.message || "",
-      type: announcement.type || "ANNOUNCEMENT",
+    const [leaves, setLeaves] = useState([]);
+    const [showModal, setShowModal] = useState(false);
+    const [showAbsentModal, setShowAbsentModal] = useState(false);
+    const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+    const [selectedLeave, setSelectedLeave] = useState(null);
+    const [selectedStatus, setSelectedStatus] = useState("");
+    const [upcomingHolidays, setUpcomingHolidays] = useState([]);
+    const [birthdays, setBirthdays] = useState([]);
+    const [absentRecords, setAbsentRecords] = useState([]);
+    const [presentRecords, setPresentRecords] = useState([]);
+    const [dashboardCounts, setDashboardCounts] = useState({
+      employeeCount: 0,
+      internCount: 0,
+      teamLeadCount: 0,
     });
-    setEditingAnnouncementId(announcement._id || announcement.id || null);
-    setShowAnnouncementModal(true);
-  };
+    const [announcements, setAnnouncements] = useState([]);
+    const [showAllAnnouncementsModal, setShowAllAnnouncementsModal] = useState(false);
+    const [showBellDropdown, setShowBellDropdown] = useState(false);
+    // Announcement form state
+    const [announcementForm, setAnnouncementForm] = useState({
+      title: "",
+      message: "",
+      type: "ANNOUNCEMENT"
+    });
+    const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
 
-  const handleAnnouncementDelete = async (announcementId) => {
-    if (!window.confirm("Delete this announcement?")) return;
+    const isAutoAbsentTimeReached = () => {
+      const now = new Date();
+      return now.getHours() > 10 || (now.getHours() === 10 && now.getMinutes() >= 30);
+    };
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `https://kt-backend-1.onrender.com/api/notification/announcement/${announcementId}`,
+    useEffect(() => {
+      fetchUsers();
+      fetchTeamLeads();
+      fetchLeaves();
+      fetchHolidays();
+      fetchAbsentAttendance();
+      fetchAnnouncements();
+    }, []);
+
+    useEffect(() => {
+      if (!isAutoAbsentTimeReached()) return;
+
+      fetchAbsentAttendance();
+
+      const intervalId = setInterval(() => {
+        if (isAutoAbsentTimeReached()) {
+          fetchAbsentAttendance();
+        }
+      }, 60000);
+
+      return () => clearInterval(intervalId);
+    }, []);
+
+    useEffect(() => {
+      setStats([
         {
-          method: "DELETE",
+          id: 1,
+          name: "Total Employees",
+          value: dashboardCounts.employeeCount,
+          icon: Users,
+          badge: "Full-Time",
+          accent: "indigo",
+        },
+        {
+          id: 2,
+          name: "Total Interns",
+          value: dashboardCounts.internCount,
+          icon: UserCheck,
+          badge: "Trainees",
+          accent: "amber",
+        },
+        {
+          id: 3,
+          name: "Total Team Leads",
+          value: dashboardCounts.teamLeadCount,
+          icon: Briefcase,
+          badge: "Management",
+          accent: "purple",
+        },
+      ]);
+    }, [dashboardCounts.employeeCount, dashboardCounts.internCount, dashboardCounts.teamLeadCount]);
+
+    async function fetchUsers() {
+      try {
+        // Fetch employees from employee/list API
+        const employeeResponse = await fetch("https://kt-backend-1.onrender.com/api/employee/list");
+        const employeeData = await employeeResponse.json();
+        console.log("Employee API Response:", employeeData);
+        
+        let employees = [];
+        if (Array.isArray(employeeData)) {
+          employees = employeeData;
+        } else if (employeeData.users && Array.isArray(employeeData.users)) {
+          employees = employeeData.users;
+        } else if (employeeData.data && Array.isArray(employeeData.data)) {
+          employees = employeeData.data;
+        } else if (employeeData.employees && Array.isArray(employeeData.employees)) {
+          employees = employeeData.employees;
+        }
+        
+        const employeeCount = Array.isArray(employees) ? employees.length : 0;
+        console.log("Employee Count:", employeeCount);
+
+        // Fetch interns from users/all API
+        const usersResponse = await fetch("https://kt-backend-1.onrender.com/api/users/all");
+        const usersData = await usersResponse.json();
+        const users = usersData.users || usersData.data || [];
+        const internCount = users.filter((user) => user.role?.toLowerCase() === "intern").length;
+
+        const formattedBirthdays = users
+          .map((user) => ({
+            id: user._id || user.id,
+            name: user.name || user.fullName || "N/A",
+            role: user.role || "N/A",
+            dob: user.dob || user.dateOfBirth || user.birthDate || user.birthday || null,
+          }))
+          .filter((user) => user.dob && isBirthdayInCurrentMonth(user.dob))
+          .sort((a, b) => new Date(a.dob) - new Date(b.dob));
+
+        setBirthdays(formattedBirthdays);
+        setDashboardCounts((prev) => ({
+          ...prev,
+          employeeCount,
+          internCount,
+        }));
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    }
+
+    async function fetchTeamLeads() {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("https://kt-backend-1.onrender.com/api/teamLead/team", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        const teamLeads = data.teamLeads || data.data || data.teamlead || data.teams || [];
+
+        setDashboardCounts((prev) => ({
+          ...prev,
+          teamLeadCount: Array.isArray(teamLeads) ? teamLeads.length : 0,
+        }));
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    async function fetchLeaves() {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("https://kt-backend-1.onrender.com/api/leave/all", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        let leaveArray = Array.isArray(data) ? data : data.leaves || data.data || [];
+
+        const hrApprovedLeaves = leaveArray.filter(
+          (leave) => leave.hrStatus?.toLowerCase() === "approved"
+        );
+        setLeaves(hrApprovedLeaves);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+async function fetchHolidays() {
+  try {
+    const response = await fetch(
+      "https://kt-backend-1.onrender.com/api/holiday/current-month"
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Holiday API failed: ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    let holidays = [];
+
+    if (Array.isArray(data)) {
+      holidays = data;
+    } else if (Array.isArray(data.holidays)) {
+      holidays = data.holidays;
+    } else if (Array.isArray(data.data)) {
+      holidays = data.data;
+    } else if (Array.isArray(data.holiday)) {
+      holidays = data.holiday;
+    } else if (Array.isArray(data.currentMonthHolidays)) {
+      holidays = data.currentMonthHolidays;
+    } else if (Array.isArray(data.result)) {
+      holidays = data.result;
+    }
+
+    const formatted = holidays.map((holiday) => ({
+      id: holiday._id || holiday.id,
+
+      name:
+        holiday.holidayName ||
+        holiday.name ||
+        "Holiday",
+
+      date: formatHolidayDate(
+        holiday.holidayDate ||
+        holiday.date
+      ),
+
+      // ================= UNSPLASH IMAGE =================
+      image:
+        holiday.imagePhotographer || null,
+
+      // Optional Unsplash attribution
+      photographer:
+        holiday.imagePhotographer || null,
+
+      photographerUrl:
+        holiday.imagePhotographerUrl || null,
+
+      unsplashUrl:
+        holiday.imageUnsplashUrl || null,
+
+      isDefault:
+        holiday.isDefault || false,
+    }));
+
+    setUpcomingHolidays(formatted);
+  } catch (error) {
+    console.error(
+      "Error fetching holidays:",
+      error
+    );
+
+    setUpcomingHolidays([]);
+  }
+}
+
+    const getLocalDateKey = (dateValue) => {
+      const parsedDate = new Date(dateValue);
+      if (Number.isNaN(parsedDate.getTime())) return null;
+      return `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`;
+    };
+
+    const normalizeAttendanceRecords = (payload) => {
+      if (Array.isArray(payload)) return payload;
+      if (!payload || typeof payload !== "object") return [];
+
+      const nestedCandidates = [
+        payload.data,
+        payload.records,
+        payload.result,
+        payload.attendance,
+        payload.absent,
+        payload.notCheckedIn,
+        payload.notCheckedInList,
+        payload.users,
+        payload.employees,
+        payload.data?.data,
+        payload.data?.records,
+        payload.data?.users,
+        payload.data?.employees,
+      ];
+
+      for (const candidate of nestedCandidates) {
+        if (Array.isArray(candidate)) return candidate;
+      }
+
+      return [];
+    };
+ 
+    async function fetchAbsentAttendance() {
+      try {
+        const token = localStorage.getItem("token");
+        
+        // Fetch absent records from the dedicated API
+        const absentResponse = await fetch(
+          "https://kt-backend-1.onrender.com/api/attendance/absent/all",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (!absentResponse.ok) {
+          throw new Error(`Absent attendance fetch failed: ${absentResponse.status}`);
+        }
+
+        const absentData = await absentResponse.json();
+        const absentRecordsList = normalizeAttendanceRecords(absentData);
+
+        const normalizedAbsent = absentRecordsList.map((record, index) => ({
+          ...record,
+          _id: record._id || record.id || `absent-${index}`,
+          employeeName: record.employeeName || record.name || record.user?.name || record.employee?.name || "N/A",
+          role: record.role || record.user?.role || record.employee?.role || "N/A",
+        }));
+
+        setAbsentRecords(normalizedAbsent);
+
+        // Fetch present records
+        const attendanceResponse = await fetch("https://kt-backend-1.onrender.com/api/attendance/admin/all", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const attendanceData = await attendanceResponse.json();
+        const attendanceList = normalizeAttendanceRecords(attendanceData);
+
+        const todayKey = getLocalDateKey(new Date());
+        const todayPresent = attendanceList.filter((record) => {
+          const recordStatus = record.status?.toLowerCase();
+          const recordDate = getLocalDateKey(
+            record.date || record.attendanceDate || record.createdAt || record.checkInTime || record.checkinTime || record.updatedAt
+          );
+          return recordStatus === "present" && (!recordDate || recordDate === todayKey);
+        });
+
+        setPresentRecords(todayPresent);
+      } catch (error) {
+        console.error("Error fetching absent attendance:", error);
+        setAbsentRecords([]);
+
+        try {
+          const token = localStorage.getItem("token");
+          const response = await fetch("https://kt-backend-1.onrender.com/api/attendance/admin/all", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await response.json();
+          let attendanceData = normalizeAttendanceRecords(data);
+
+          const todayKey = getLocalDateKey(new Date());
+          const absentOnly = attendanceData.filter((record) => {
+            const recordStatus = record.status?.toLowerCase();
+            const recordDate = getLocalDateKey(
+              record.date || record.attendanceDate || record.createdAt || record.checkInTime || record.checkinTime || record.updatedAt
+            );
+            return recordStatus === "absent" && (!recordDate || recordDate === todayKey);
+          });
+
+          const presentOnly = attendanceData.filter((record) => {
+            const recordStatus = record.status?.toLowerCase();
+            const recordDate = getLocalDateKey(
+              record.date || record.attendanceDate || record.createdAt || record.checkInTime || record.checkinTime || record.updatedAt
+            );
+            return recordStatus === "present" && (!recordDate || recordDate === todayKey);
+          });
+
+          setAbsentRecords(absentOnly);
+          setPresentRecords(presentOnly);
+        } catch (fallbackError) {
+          console.error("Fallback absent attendance fetch failed:", fallbackError);
+        }
+      }
+    }
+
+    async function fetchAnnouncements() {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("https://kt-backend-1.onrender.com/api/notification/announcement/all", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        
+        let announcementsList = [];
+        if (Array.isArray(data)) {
+          announcementsList = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          announcementsList = data.data;
+        } else if (data.announcements && Array.isArray(data.announcements)) {
+          announcementsList = data.announcements;
+        }
+        
+        const sortedAnnouncements = announcementsList
+          .filter(item => item.title && item.message)
+          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        
+        setAnnouncements(sortedAnnouncements);
+      } catch (error) {
+        console.error("Error fetching announcements:", error);
+      }
+    }
+
+    const updateLeaveStatus = async (leaveId, status) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("https://kt-backend-1.onrender.com/api/leave/admin-approval", {
+          method: "PUT",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-        }
-      );
-
-      const data = await response.json().catch(() => null);
-      if (response.ok && (data?.success || data?.message || data?.data)) {
-        await fetchAnnouncements();
-        alert("Announcement deleted successfully.");
-      } else {
-        alert(data?.message || "Failed to delete announcement. Please try again.");
+          body: JSON.stringify({ leaveId, status }),
+        });
+        const data = await response.json();
+        if (data.success) fetchLeaves();
+      } catch (error) {
+        console.error(error);
       }
-    } catch (error) {
-      console.error("Error deleting announcement:", error);
-      alert("Error deleting announcement. Please try again.");
-    }
-  };
+    };
 
-  const formatHolidayDate = (dateValue) => {
-    if (!dateValue) return "";
-    const parsedDate = new Date(dateValue);
-    if (Number.isNaN(parsedDate.getTime())) return dateValue;
-    return parsedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
+    const confirmAction = async () => {
+      await updateLeaveStatus(selectedLeave, selectedStatus);
+      setShowModal(false);
+    };
 
-  const formatBirthdayDate = (dateValue) => {
-    if (!dateValue) return "";
-    const parsedDate = new Date(dateValue);
-    if (Number.isNaN(parsedDate.getTime())) return dateValue;
-    return parsedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
+    const handleAnnouncementSubmit = async () => {
+      if (!announcementForm.title.trim() || !announcementForm.message.trim()) {
+        alert("Please fill both title and message before posting.");
+        return;
+      }
 
-  const formatUpdateDate = (dateValue) => {
-    if (!dateValue) return "";
-    const parsedDate = new Date(dateValue);
-    if (Number.isNaN(parsedDate.getTime())) return dateValue;
-    return parsedDate.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  const formatAnnouncementDate = (dateValue) => {
-    if (!dateValue) return "";
-    const parsedDate = new Date(dateValue);
-    if (Number.isNaN(parsedDate.getTime())) return dateValue;
-    return parsedDate.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  const isBirthdayInCurrentMonth = (dateValue) => {
-    if (!dateValue) return false;
-    const parsedDate = new Date(dateValue);
-    if (Number.isNaN(parsedDate.getTime())) return false;
-    return parsedDate.getMonth() === new Date().getMonth();
-  };
-
-  const filteredDailyUpdates = dailyUpdates.filter((update) => {
-    const name = (update.employeeId?.name || update.employeeName || update.employee?.name || "").toLowerCase();
-    const project = (update.projectId?.projectName || update.projectName || "").toLowerCase();
-    const status = (update.status || "submitted").toLowerCase();
-    const query = searchQuery.toLowerCase();
-
-    const matchesSearch = name.includes(query) || project.includes(query);
-    const matchesTab = activeTab === "all" || status.includes(activeTab);
-
-    return matchesSearch && matchesTab;
-  });
-
-  const getAccentStyles = (accent) => {
-    switch (accent) {
-      case "amber":
-        return {
-          iconBg: "bg-amber-50 text-amber-600",
-          badgeBg: "bg-amber-50 text-amber-700",
+      try {
+        const token = localStorage.getItem("token");
+        const payload = {
+          title: announcementForm.title.trim(),
+          message: announcementForm.message.trim(),
+          type: announcementForm.type || "ANNOUNCEMENT",
         };
-      case "purple":
-        return {
-          iconBg: "bg-purple-50 text-purple-600",
-          badgeBg: "bg-purple-50 text-purple-700",
-        };
-      default:
-        return {
-          iconBg: "bg-indigo-50 text-indigo-600",
-          badgeBg: "bg-indigo-50 text-indigo-700",
-        };
-    }
-  };
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Flat Square Top Banner with Announcement Button */}
-        <div className="bg-white border border-slate-200/80 p-6 sm:p-8 shadow-sm rounded-none">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                Dashboard
-              </h1>
-            </div>
+        const endpoint = editingAnnouncementId
+          ? `https://kt-backend-1.onrender.com/api/notification/announcement/${editingAnnouncementId}`
+          : "https://kt-backend-1.onrender.com/api/notification/announcement/create";
+        const method = editingAnnouncementId ? "PUT" : "POST";
 
-            <div className="flex items-center gap-3">
-              {/* New Announcement Button */}
+        const response = await fetch(endpoint, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json().catch(() => null);
+        const success = response.ok && (data?.success || data?.message || data?.data);
+        if (success) {
+          setAnnouncementForm({
+            title: "",
+            message: "",
+            type: "ANNOUNCEMENT",
+          });
+          setEditingAnnouncementId(null);
+          setShowAnnouncementModal(false);
+          await fetchAnnouncements();
+        } else {
+          alert(data?.message || "Failed to save announcement. Please try again.");
+        }
+      } catch (error) {
+        console.error("Error posting announcement:", error);
+      }
+    };
+
+    const handleAnnouncementEdit = (announcement) => {
+      setAnnouncementForm({
+        title: announcement.title || "",
+        message: announcement.message || "",
+        type: announcement.type || "ANNOUNCEMENT",
+      });
+      setEditingAnnouncementId(announcement._id || announcement.id || null);
+      setShowAnnouncementModal(true);
+    };
+
+    const handleAnnouncementDelete = async (announcementId) => {
+      if (!window.confirm("Delete this announcement?")) return;
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `https://kt-backend-1.onrender.com/api/notification/announcement/${announcementId}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          await fetchAnnouncements();
+        }
+      } catch (error) {
+        console.error("Error deleting announcement:", error);
+      }
+    };
+
+    const formatHolidayDate = (dateValue) => {
+      if (!dateValue) return "";
+      const parsedDate = new Date(dateValue);
+      if (Number.isNaN(parsedDate.getTime())) return dateValue;
+      return parsedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    };
+
+    const formatBirthdayDate = (dateValue) => {
+      if (!dateValue) return "";
+      const parsedDate = new Date(dateValue);
+      if (Number.isNaN(parsedDate.getTime())) return dateValue;
+      return parsedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    };
+
+    const formatAnnouncementDate = (dateValue) => {
+      if (!dateValue) return "";
+      const parsedDate = new Date(dateValue);
+      if (Number.isNaN(parsedDate.getTime())) return dateValue;
+      return parsedDate.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    };
+
+    const isBirthdayInCurrentMonth = (dateValue) => {
+      if (!dateValue) return false;
+      const parsedDate = new Date(dateValue);
+      if (Number.isNaN(parsedDate.getTime())) return false;
+      return parsedDate.getMonth() === new Date().getMonth();
+    };
+
+    const getAccentStyles = (accent) => {
+      switch (accent) {
+        case "amber":
+          return {
+            iconBg: "bg-amber-50 text-amber-600 border border-amber-200/60",
+            badgeBg: "bg-amber-50 text-amber-700 border border-amber-200/60",
+          };
+        case "purple":
+          return {
+            iconBg: "bg-purple-50 text-purple-600 border border-purple-200/60",
+            badgeBg: "bg-purple-50 text-purple-700 border border-purple-200/60",
+          };
+        default:
+          return {
+            iconBg: "bg-indigo-50 text-indigo-600 border border-indigo-200/60",
+            badgeBg: "bg-indigo-50 text-indigo-700 border border-indigo-200/60",
+          };
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Minimal Compact Header */}
+        <div className="bg-transparent p-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-base font-semibold text-slate-900 tracking-tight">
+              Dashboard
+            </h1>
+            <p className="text-xs text-slate-400">Overview of organization metrics & daily status</p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Bell Icon & Dropdown */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
-                  setEditingAnnouncementId(null);
-                  setShowAnnouncementModal(true);
-                }}
-                className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition-colors rounded-none"
+                onClick={() => setShowBellDropdown(!showBellDropdown)}
+                className="relative p-1.5 rounded-lg border border-transparent bg-transparent text-slate-600 hover:bg-slate-100 transition-colors"
               >
-                <Plus className="h-4 w-4" />
-                New Announcement
+                <Bell className="h-4 w-4" />
+                {announcements.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
+                    {announcements.length}
+                  </span>
+                )}
               </button>
-              
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-4 py-2 rounded-none">
-                <div className="h-2 w-2 bg-emerald-500 rounded-none" />
-                <span className="text-xs font-semibold text-slate-600">
-                  {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-                </span>
-              </div>
+
+              {showBellDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowBellDropdown(false)} />
+                  <div className="absolute right-0 mt-1.5 w-72 bg-white border border-slate-200/90 rounded-xl shadow-lg z-50 overflow-hidden text-xs">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/50">
+                      <h3 className="font-semibold text-slate-900">Announcements</h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowBellDropdown(false);
+                          setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
+                          setEditingAnnouncementId(null);
+                          setShowAnnouncementModal(true);
+                        }}
+                        className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                      >
+                        <Plus className="h-3 w-3" /> New
+                      </button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                      {announcements.length === 0 ? (
+                        <div className="p-4 text-center text-slate-400">No announcements</div>
+                      ) : (
+                        announcements.slice(0, 5).map((announcement, idx) => (
+                          <div key={announcement._id || idx} className="p-3 hover:bg-slate-50 transition-colors">
+                            <p className="font-medium text-slate-800 truncate">{announcement.title}</p>
+                            <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{announcement.message}</p>
+                            <div className="flex items-center justify-between mt-1.5 text-[10px]">
+                              <span className="text-slate-400">{formatAnnouncementDate(announcement.createdAt)}</span>
+                              <div className="flex gap-1">
+                                <button onClick={() => handleAnnouncementEdit(announcement)} className="p-0.5 text-slate-400 hover:text-slate-700">
+                                  <Edit3 className="h-3 w-3" />
+                                </button>
+                                <button onClick={() => handleAnnouncementDelete(announcement._id)} className="p-0.5 text-slate-400 hover:text-rose-600">
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowBellDropdown(false);
+                        setShowAllAnnouncementsModal(true);
+                      }}
+                      className="w-full border-t border-slate-100 py-2 text-center text-[11px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      View all
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
+                setEditingAnnouncementId(null);
+                setShowAnnouncementModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors shadow-xs"
+            >
+              <Plus className="h-3.5 w-3.5" /> Post Announcement
+            </button>
           </div>
         </div>
 
-        {/* Clean Square Metric Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {/* Shrink-to-fit Minimal Stat Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {stats.map((stat) => {
             const Icon = stat.icon;
             const styles = getAccentStyles(stat.accent);
             return (
               <div
                 key={stat.id}
-                className="bg-white p-5 border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow rounded-none flex flex-col justify-between"
+                className="bg-white p-3.5 border border-slate-200/80 rounded-xl shadow-xs hover:border-slate-300 transition-all"
               >
                 <div className="flex items-center justify-between">
-                  <div className={`p-2.5 ${styles.iconBg} rounded-none`}>
-                    <Icon className="h-5 w-5" />
+                  <div className={`p-1.5 rounded-md ${styles.iconBg}`}>
+                    <Icon className="h-4 w-4" />
                   </div>
-                  <span className={`text-[11px] font-bold px-2.5 py-0.5 ${styles.badgeBg} uppercase tracking-wider rounded-none`}>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${styles.badgeBg}`}>
                     {stat.badge}
                   </span>
                 </div>
-                <div className="mt-5">
-                  <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                    {stat.value}
-                  </h3>
-                  <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider">{stat.name}</p>
+                <div className="mt-2.5">
+                  <p className="text-xl font-bold text-slate-900 tracking-tight">{stat.value}</p>
+                  <p className="text-[11px] text-slate-500 font-medium">{stat.name}</p>
                 </div>
               </div>
             );
           })}
 
-          {/* Clean Square Absent Trigger Card */}
+          {/* Absent Card */}
           <button
             type="button"
             onClick={() => setShowAbsentModal(true)}
-            className="text-left bg-white p-5 border border-rose-200/80 shadow-sm hover:shadow-md hover:bg-rose-50/20 transition-all flex flex-col justify-between rounded-none group"
+            className="bg-white p-3.5 border border-rose-200/80 rounded-xl shadow-xs hover:bg-rose-50/20 hover:border-rose-300 transition-all text-left group"
           >
             <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-rose-50 text-rose-600 rounded-none">
-                <UserX className="h-5 w-5" />
+              <div className="p-1.5 rounded-md bg-rose-50 text-rose-600 border border-rose-200/60">
+                <UserX className="h-4 w-4" />
               </div>
-              <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-0.5 uppercase tracking-wider rounded-none">
-                Action Req.
+              <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200/60 px-2 py-0.5 rounded-md">
+                Action Required
               </span>
             </div>
-            <div className="mt-5 flex items-end justify-between">
+            <div className="mt-2.5 flex items-end justify-between">
               <div>
-                <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                  {absentRecords.length}
-                </h3>
-                <p className="text-xs font-bold text-rose-600 mt-1 uppercase tracking-wider">Absent Today</p>
+                <p className="text-xl font-bold text-slate-900 tracking-tight">{absentRecords.length}</p>
+                <p className="text-[11px] text-rose-600 font-medium">Absent Today</p>
               </div>
-              <div className="h-8 w-8 bg-rose-50 flex items-center justify-center text-rose-600 group-hover:translate-x-1 transition-transform rounded-none">
-                <ChevronRight className="h-4 w-4" />
-              </div>
+              <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-rose-500 transition-colors" />
             </div>
           </button>
         </div>
 
-        {/* Schedules & Celebrations Grid (Square) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Corporate Events & Celebrations */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           
-          {/* Corporate Holidays */}
-          <div className="bg-white border border-slate-200/80 shadow-sm flex flex-col rounded-none">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-none">
-                  <Calendar className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Corporate Holidays</h2>
-                  <p className="text-[11px] text-slate-400 font-medium">Scheduled office closures</p>
-                </div>
+          {/* Holidays */}
+          <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                <h2 className="text-xs font-semibold text-slate-900">Upcoming Holidays</h2>
               </div>
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-none">
-                {upcomingHolidays.length} Events
-              </span>
+              <span className="text-[10px] font-medium text-slate-400">{upcomingHolidays.length} Events</span>
             </div>
 
-            <div className="p-5 space-y-2.5 max-h-[350px] overflow-y-auto">
+            <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
               {upcomingHolidays.length === 0 ? (
-                <div className="text-center py-10 text-xs font-semibold text-slate-400 border border-dashed border-slate-200 bg-slate-50/50 rounded-none">
-                  No upcoming holidays scheduled
+                <div className="text-center py-6 text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                  No upcoming holidays
                 </div>
               ) : (
                 upcomingHolidays.map((holiday) => (
                   <div
                     key={holiday.id}
-                    className="flex items-center justify-between p-3.5 bg-slate-50/60 border border-slate-100 hover:bg-indigo-50/30 transition-colors rounded-none"
+                    className="relative p-3 rounded-lg overflow-hidden border border-slate-200/60 shadow-xs flex items-center justify-between min-h-[56px]"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.5)), url(${holiday.image})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-2 bg-indigo-500 rounded-none" />
-                      <span className="text-xs font-bold text-slate-800">{holiday.name}</span>
+                    <div className="flex items-center gap-2 text-white z-10">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-white">{holiday.name}</p>
+                        <p className="text-[10px] text-white/70">Official Holiday</p>
+                      </div>
                     </div>
-                    <span className="text-xs font-semibold text-slate-600 bg-white px-3 py-1 border border-slate-200/60 flex items-center gap-1.5 rounded-none">
-                      <Clock className="h-3 w-3 text-indigo-500" />
+                    <span className="text-[10px] font-semibold bg-white/20 backdrop-blur-xs text-white px-2.5 py-1 rounded-md border border-white/30 flex items-center gap-1 z-10 shrink-0">
+                      <Clock className="h-3 w-3 text-amber-300" />
                       {holiday.date}
                     </span>
                   </div>
@@ -607,481 +777,363 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Team Celebrations */}
-          <div className="bg-white border border-slate-200/80 shadow-sm flex flex-col rounded-none">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-pink-50 text-pink-600 rounded-none">
-                  <Cake className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Team Celebrations</h2>
-                  <p className="text-[11px] text-slate-400 font-medium">Birthdays this month</p>
-                </div>
+          {/* Birthdays */}
+          <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Cake className="h-3.5 w-3.5 text-slate-400" />
+                <h2 className="text-xs font-semibold text-slate-900">Celebrations</h2>
               </div>
-              <span className="text-xs font-bold text-pink-600 bg-pink-50 px-2.5 py-1 rounded-none">
-                {birthdays.length} Birthdays
-              </span>
+              <span className="text-[10px] font-medium text-slate-400">{birthdays.length} Birthdays</span>
             </div>
 
-            <div className="p-5 space-y-2.5 max-h-[350px] overflow-y-auto">
+            <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
               {birthdays.length === 0 ? (
-                <div className="text-center py-10 text-xs font-semibold text-slate-400 border border-dashed border-slate-200 bg-slate-50/50 rounded-none">
-                  No birthday celebrations this month
+                <div className="text-center py-6 text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                  No birthdays this month
                 </div>
               ) : (
-                birthdays.map((person) => (
-                  <div
-                    key={person.id}
-                    className="flex items-center justify-between p-3.5 bg-slate-50/60 border border-slate-100 hover:bg-pink-50/30 transition-colors rounded-none"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-xs rounded-none">
-                        {person.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">{person.name}</p>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{person.role}</p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-semibold text-pink-600 bg-pink-50 px-3 py-1 rounded-none">
-                      {formatBirthdayDate(person.dob)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+                birthdays.map((person) => {
+                  const initials = person.name
+                    .trim()
+                    .split(/\s+/)
+                    .map((word) => word.charAt(0).toUpperCase())
+                    .slice(0, 2)
+                    .join("");
 
-        </div>
-
-        {/* Daily Submissions Feed + Announcement Section (Grid) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Daily Submissions Feed Container (Square) - Left Column (2/3 width) */}
-          <div className="lg:col-span-2 bg-white border border-slate-200/80 shadow-sm rounded-none overflow-hidden">
-            
-            {/* Section Controls Topbar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-5 border-b border-slate-100 bg-slate-50/50">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 uppercase tracking-wide">Daily Work Submissions</h2>
-                <p className="text-xs text-slate-400 font-medium">Detailed progress reports and project logs</p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                {/* Tab Pills (Square) */}
-                <div className="flex items-center bg-slate-100 border border-slate-200/80 rounded-none p-1">
-                  {["all", "submitted", "completed"].map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setActiveTab(tab)}
-                      className={`px-3 py-1.5 text-xs font-bold uppercase transition-all rounded-none ${
-                        activeTab === tab
-                          ? "bg-white text-slate-900 shadow-xs"
-                          : "text-slate-500 hover:text-slate-800"
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Live Search Input (Square) */}
-                <div className="relative w-full sm:w-60">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Filter name or project..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full text-xs pl-9 pr-3.5 py-2 bg-white border border-slate-200 rounded-none focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Submissions Feed List */}
-            <div className="p-6 max-h-[650px] overflow-y-auto space-y-3">
-              {filteredDailyUpdates.length === 0 ? (
-                <div className="text-center py-16 text-xs font-semibold text-slate-400 border border-dashed border-slate-200 bg-slate-50/50 rounded-none">
-                  No work logs matching your criteria
-                </div>
-              ) : (
-                filteredDailyUpdates.map((update, index) => {
-                  const isExpanded = expandedUpdateId === (update._id || update.id || index);
                   return (
                     <div
-                      key={update._id || update.id || index}
-                      className="bg-white border border-slate-200/80 shadow-xs rounded-none overflow-hidden transition-all"
+                      key={person.id}
+                      className="group flex items-center gap-3 p-3 rounded-lg bg-slate-50/60 border border-slate-100 hover:bg-rose-50/40 hover:border-rose-200 transition-colors"
                     >
-                      {/* Collapsed View - Name and Role Only */}
-                      <button
-                        type="button"
-                        onClick={() => setExpandedUpdateId(isExpanded ? null : (update._id || update.id || index))}
-                        className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs rounded-none flex-shrink-0">
-                            {(update.employeeId?.name || update.employeeName || "U").charAt(0)}
-                          </div>
-                          <div>
-                            <p className="text-xs font-extrabold text-slate-900">
-                              {update.employeeId?.name || update.employeeName || update.employee?.name || "N/A"}
-                            </p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                              {update.employeeId?.role || update.role || "N/A"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1 border border-emerald-200/60 rounded-none uppercase whitespace-nowrap">
-                            <CheckCircle2 className="h-3 w-3" />
-                            {update.status || "Submitted"}
-                          </span>
-                          <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                        </div>
-                      </button>
-
-                      {/* Expanded View - Full Details */}
-                      {isExpanded && (
-                        <div className="border-t border-slate-100 p-5 space-y-4 bg-slate-50/30">
-                          {/* Meta Bar */}
-                          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-semibold text-slate-500 bg-white px-3 py-1 border border-slate-200/60 rounded-none">
-                                {formatUpdateDate(update.reportDate || update.createdAt)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Task Grid Cards (Square) */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                            <div className="bg-white p-3.5 border border-slate-100 rounded-none">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                                Project & Effort
-                              </span>
-                              <p className="font-bold text-slate-800 flex items-center gap-1.5">
-                                <FolderGit2 className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
-                                {update.projectId?.projectName || update.projectName || "N/A"}
-                              </p>
-                              <p className="text-slate-500 mt-1.5 font-medium">
-                                Logged: <strong className="text-slate-800">{update.hoursWorked ?? "N/A"} hrs</strong>
-                              </p>
-                            </div>
-
-                            <div className="bg-white p-3.5 border border-slate-100 rounded-none">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                                Today's Progress
-                              </span>
-                              <p className="text-slate-700 font-medium leading-relaxed">
-                                {update.todaysWork || "N/A"}
-                              </p>
-                            </div>
-
-                            <div className="bg-white p-3.5 border border-slate-100 rounded-none">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                                Tomorrow's Plan
-                              </span>
-                              <p className="text-slate-700 font-medium leading-relaxed">
-                                {update.tomorrowPlan || "N/A"}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Additional notes row */}
-                          {(update.pendingWork || update.issuesFaced || update.remarks) && (
-                            <div className="pt-2 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500 border-t border-slate-100/80">
-                              {update.pendingWork && (
-                                <p className="font-medium">
-                                  <strong className="text-slate-700 font-semibold">Pending:</strong> {update.pendingWork}
-                                </p>
-                              )}
-                              {update.issuesFaced && (
-                                <p className="font-medium text-rose-600">
-                                  <strong className="font-semibold">Blockers:</strong> {update.issuesFaced}
-                                </p>
-                              )}
-                              {update.remarks && (
-                                <p className="font-medium">
-                                  <strong className="text-slate-700 font-semibold">Remarks:</strong> {update.remarks}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <div className="h-10 w-10 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-sm font-bold shrink-0 border border-rose-200">
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                       
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Birthday: {formatBirthdayDate(person.dob)}
+                        </p>
+                        <span className="pointer-events-none absolute z-20 hidden max-w-[220px] -translate-y-1 rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg group-hover:block">
+                          {person.name}
+                        </span>
+                      </div>
                     </div>
                   );
                 })
               )}
             </div>
           </div>
-
-          {/* Announcement Display Section - Right Column (1/3 width) */}
-          <div className="bg-white border border-slate-200/80 shadow-sm rounded-none overflow-hidden flex flex-col min-h-[650px]">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-none">
-                    <Bell className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Announcements</h2>
-                    <p className="text-[11px] text-slate-400 font-medium">Latest updates from team</p>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-none">
-                  {announcements.length}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-5 flex-1 overflow-y-auto space-y-3">
-              {announcements.length === 0 ? (
-                <div className="text-center py-10 text-xs font-semibold text-slate-400 border border-dashed border-slate-200 bg-slate-50/50 rounded-none">
-                  No announcements available
-                </div>
-              ) : (
-                announcements.slice(0, showAllAnnouncements ? announcements.length : 3).map((announcement, index) => (
-                  <div
-                    key={announcement._id || announcement.id || index}
-                    className="p-4 bg-slate-50/60 border border-slate-100 hover:border-indigo-200 transition-colors rounded-none"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div className="mt-1">
-                        <Megaphone className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <h4 className="text-xs font-bold text-slate-900">{announcement.title}</h4>
-                          <span className="text-[9px] font-medium text-slate-400 whitespace-nowrap">
-                            {formatAnnouncementDate(announcement.createdAt)}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-relaxed break-words">
-                          {announcement.message}
-                        </p>
-                        {announcement.type && (
-                          <span className="inline-block mt-1.5 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 uppercase tracking-wider rounded-none">
-                            {announcement.type}
-                          </span>
-                        )}
-
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleAnnouncementEdit(announcement)}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-none hover:bg-slate-200 transition-colors"
-                          >
-                            <Edit3 className="h-3.5 w-3.5" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAnnouncementDelete(announcement._id || announcement.id || index)}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-none hover:bg-rose-200 transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-              
-              {/* Show More/Less Button */}
-              {announcements.length > 3 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllAnnouncements(!showAllAnnouncements)}
-                  className="w-full text-center py-2 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50/30 transition-colors border border-slate-200 bg-white rounded-none"
-                >
-                  {showAllAnnouncements ? "Show Less" : `View All (${announcements.length})`}
-                </button>
-              )}
-            </div>
-          </div>
-
         </div>
 
-      </div>
-
-      {/* Announcement Modal (Square) */}
-      {showAnnouncementModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-slate-200 w-full max-w-2xl shadow-xl rounded-none overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-none">
-                  <Megaphone className="h-4 w-4" />
-                </div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase">
-                  {editingAnnouncementId ? "Edit Announcement" : "Post New Announcement"}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAnnouncementModal(false);
-                  setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
-                  setEditingAnnouncementId(null);
-                }}
-                className="p-1 text-slate-400 hover:text-slate-600 transition-colors rounded-none"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        {/* Present Today Grid */}
+        <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <h2 className="text-xs font-semibold text-slate-900">Present Today</h2>
             </div>
+            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-md">
+              {presentRecords.length} Active
+            </span>
+          </div>
 
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter announcement title"
-                  value={announcementForm.title}
-                  onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
-                  className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-none focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
-                />
+          <div className="p-3 max-h-[300px] overflow-y-auto">
+            {presentRecords.length === 0 ? (
+              <div className="text-center py-6 text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                No present records logged today
               </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                {presentRecords.map((record, index) => {
+                  const displayName = record.employee?.name || record.employeeName || record.user?.name || record.name || "N/A";
+                  const role = record.employee?.role || record.role || record.user?.role || "N/A";
+                  const initials = displayName
+                    .split(" ")
+                    .map((word) => word.charAt(0).toUpperCase())
+                    .slice(0, 2)
+                    .join("");
 
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Message
-                </label>
-                <textarea
-                  placeholder="Enter announcement message"
-                  value={announcementForm.message}
-                  onChange={(e) => setAnnouncementForm({ ...announcementForm, message: e.target.value })}
-                  rows="5"
-                  className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-none focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium resize-none"
-                />
+                  return (
+                    <div
+                      key={record._id || record.id || index}
+                      className="flex flex-col items-center p-2.5 rounded-lg bg-slate-50/60 border border-slate-100 hover:border-emerald-300 transition-all text-center"
+                    >
+                      <div className="h-9 w-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-semibold shrink-0">
+                        {initials}
+                      </div>
+                      <p className="mt-1.5 text-xs font-medium text-slate-800 truncate w-full">
+                        {displayName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 truncate w-full">{role}</p>
+                    </div>
+                  );
+                })}
               </div>
+            )}
+          </div>
+        </div>
 
-              <div className="flex gap-2.5 pt-2">
+        {/* Announcement Modal */}
+        {showAnnouncementModal && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white w-full max-w-md rounded-xl shadow-xl border border-slate-200/90 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-xs font-semibold text-slate-900">
+                  {editingAnnouncementId ? "Edit Announcement" : "Post Announcement"}
+                </h3>
                 <button
                   type="button"
                   onClick={() => {
-                    setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
                     setShowAnnouncementModal(false);
+                    setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
+                    setEditingAnnouncementId(null);
                   }}
-                  className="flex-1 border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors rounded-none"
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
                 >
-                  CANCEL
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    placeholder="Enter title"
+                    value={announcementForm.title}
+                    onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+                    className="w-full px-3 py-1.5 text-xs border border-slate-200/90 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Message</label>
+                  <textarea
+                    placeholder="Enter message..."
+                    value={announcementForm.message}
+                    onChange={(e) => setAnnouncementForm({ ...announcementForm, message: e.target.value })}
+                    rows="3"
+                    className="w-full px-3 py-1.5 text-xs border border-slate-200/90 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
+                      setShowAnnouncementModal(false);
+                    }}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAnnouncementSubmit}
+                    disabled={!announcementForm.title.trim() || !announcementForm.message.trim()}
+                    className="px-4 py-1.5 rounded-lg text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-xs"
+                  >
+                    {editingAnnouncementId ? "Update" : "Post"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Absent Modal */}
+      {/* Absent Modal */}
+{showAbsentModal && (
+  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-white w-full max-w-sm rounded-xl shadow-xl border border-slate-200/90 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center gap-2">
+          <UserX className="h-4 w-4 text-rose-600" />
+          <h3 className="text-xs font-semibold text-slate-900">
+            Absent Today
+          </h3>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowAbsentModal(false)}
+          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="p-3 max-h-[50vh] overflow-y-auto">
+        {absentRecords.length === 0 ? (
+          <div className="text-center py-6 text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+            No absent records today
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {absentRecords.map((record, index) => {
+              const displayName =
+                record.employee?.name ||
+                record.employeeName ||
+                record.user?.name ||
+                record.name ||
+                "N/A";
+
+              const role =
+                record.employee?.role ||
+                record.role ||
+                record.user?.role ||
+                "N/A";
+
+              const initials = displayName
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((word) => word.charAt(0).toUpperCase())
+                .slice(0, 2)
+                .join("");
+
+              return (
+                <div
+                  key={record._id || record.id || index}
+                  className="group flex flex-col items-center justify-center text-center p-3 rounded-xl bg-slate-50/70 border border-slate-100 hover:bg-rose-50/40 hover:border-rose-200 transition-all"
+                >
+                  {/* Initial Circle */}
+                  <div className="h-11 w-11 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-sm font-bold border border-rose-200 shadow-xs">
+                    {initials}
+                  </div>
+
+                  {/* Employee Name */}
+                  <p
+                    className="mt-2 text-xs font-semibold text-slate-800 truncate w-full"
+                    title={displayName}
+                  >
+                    {displayName}
+                  </p>
+
+                  {/* Role */}
+                  <p
+                    className="mt-0.5 text-[10px] text-slate-400 truncate w-full"
+                    title={role}
+                  >
+                    {role}
+                  </p>
+
+                  {/* Absent Badge */}
+                  <span className="mt-2 px-2 py-0.5 text-[10px] font-semibold bg-rose-50 text-rose-600 border border-rose-200/60 rounded-md">
+                    Absent
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+        {/* Confirmation Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white w-full max-w-xs rounded-xl p-4 text-center shadow-xl border border-slate-200/90">
+              <div
+                className={`mx-auto h-8 w-8 rounded-full flex items-center justify-center mb-3 ${
+                  selectedStatus === "approved" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                }`}
+              >
+                <AlertCircle className="h-4 w-4" />
+              </div>
+
+              <h3 className="text-xs font-semibold text-slate-900">Confirm Decision</h3>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Set leave status to <span className="font-semibold text-slate-800 uppercase">{selectedStatus}</span>?
+              </p>
+
+              <div className="flex gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 border border-slate-200 bg-white py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleAnnouncementSubmit}
-                  disabled={!announcementForm.title.trim() || !announcementForm.message.trim()}
-                  className="flex-1 py-2.5 text-xs font-bold text-white rounded-none bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                  onClick={confirmAction}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium text-white transition-colors shadow-xs ${
+                    selectedStatus === "approved" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+                  }`}
                 >
-                  POST
+                  Confirm
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Absent Attendees Modal (Square) */}
-      {showAbsentModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-slate-200 w-full max-w-md shadow-xl rounded-none overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-rose-50 text-rose-600 rounded-none">
-                  <UserX className="h-4 w-4" />
-                </div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase">Absent Employees Today</h3>
+        {/* View All Announcements Modal */}
+        {showAllAnnouncementsModal && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white w-full max-w-xl rounded-xl shadow-xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-xs font-semibold text-slate-900">All Announcements</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAllAnnouncementsModal(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAbsentModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 transition-colors rounded-none"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
 
-            <div className="max-h-[50vh] overflow-y-auto p-6 space-y-2.5">
-              {absentRecords.length === 0 ? (
-                <div className="p-8 text-center text-xs font-semibold text-slate-400 border border-dashed border-slate-200 bg-slate-50/50 rounded-none">
-                  No absent records found
-                </div>
-              ) : (
-                absentRecords.map((record, index) => (
-                  <div
-                    key={record._id || record.id || index}
-                    className="flex items-center justify-between p-3.5 bg-slate-50/60 border border-slate-100 rounded-none"
-                  >
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">
-                        {record.employee?.name || record.employeeName || record.user?.name || record.name || "N/A"}
-                      </p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        {record.employee?.role || record.role || record.user?.role || "N/A"}
-                      </p>
-                    </div>
-                    <span className="px-2.5 py-1 text-[11px] font-bold bg-rose-50 text-rose-600 rounded-none uppercase">
-                      {record.status || "Absent"}
-                    </span>
+              <div className="p-4 overflow-y-auto space-y-3 flex-1">
+                {announcements.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                    No announcements
                   </div>
-                ))
-              )}
+                ) : (
+                  announcements.map((announcement, index) => (
+                    <div key={announcement._id || index} className="p-3 rounded-lg bg-slate-50/60 border border-slate-100">
+                      <div className="flex items-start justify-between gap-3">
+                        <h4 className="text-xs font-semibold text-slate-900">{announcement.title}</h4>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {formatAnnouncementDate(announcement.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-1">{announcement.message}</p>
+                      <div className="mt-2.5 flex items-center justify-end gap-2 border-t border-slate-200/60 pt-1.5">
+                        <button
+                          onClick={() => handleAnnouncementEdit(announcement)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900"
+                        >
+                          <Edit3 className="h-3 w-3" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleAnnouncementDelete(announcement._id)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:text-rose-700"
+                        >
+                          <Trash2 className="h-3 w-3" /> Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowAllAnnouncementsModal(false)}
+                  className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-800 transition-colors shadow-xs"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Decision Confirmation Modal (Square) */}
-      {showModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-slate-200 w-full max-w-xs shadow-xl p-6 text-center rounded-none">
-            <div
-              className={`mx-auto flex h-12 w-12 items-center justify-center mb-4 rounded-none ${
-                selectedStatus === "approved"
-                  ? "bg-emerald-50 text-emerald-600"
-                  : "bg-rose-50 text-rose-600"
-              }`}
-            >
-              <AlertCircle className="h-6 w-6" />
-            </div>
-
-            <h3 className="text-base font-bold text-slate-900 uppercase">Confirm Decision</h3>
-            <p className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed">
-              Are you sure you want to change this leave status to{" "}
-              <strong className="uppercase font-bold text-slate-900">{selectedStatus}</strong>?
-            </p>
-
-            <div className="flex gap-2.5 mt-6">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="flex-1 border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors rounded-none"
-              >
-                CANCEL
-              </button>
-              <button
-                type="button"
-                onClick={confirmAction}
-                className={`flex-1 py-2.5 text-xs font-bold text-white transition-colors rounded-none ${
-                  selectedStatus === "approved"
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-rose-600 hover:bg-rose-700"
-                }`}
-              >
-                CONFIRM
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
+        )}
+      </div>
+    );
+  }

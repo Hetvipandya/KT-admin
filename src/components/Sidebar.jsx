@@ -1,184 +1,141 @@
-
 import { NavLink, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp, Menu, X, LayoutDashboard, FileText, Users, Briefcase, UserCheck, User, LogOut } from "lucide-react";
+import { useState } from "react";
+import { 
+  Menu, X, LayoutDashboard, FileText, Users, Briefcase, UserCheck, User, LogOut, ChevronRight, Settings, Calendar, Award
+} from "lucide-react";
 
 function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false); // Mobile sidebar state
-  const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
-  const menu = [
-    { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-       { label: "Employee Requests", path: "/employee-requests", icon: UserCheck },
-           { label: "Portfolio Leads", path: "/portfolio-leads", icon: UserCheck },
-               { label: "Positions", path: "/positions", icon: Briefcase },
-                  { label: "Contacts", path: "/contacts", icon: Users },
-                  {label:"Team Lead", path: "/team-lead", icon: UserCheck},
-    { label: "Applications", path: "/applications", icon: FileText },
- 
-
-
- 
-    { label: "Profile", path: "/profile", icon: User },
-    { label: "Logout", path: "/logout", icon: LogOut },
-  ];
-
-  const attendanceItems = [
-    { label: "Employees", path: "/attendance/employees" },
-    { label: "Check-In Request", path: "/attendance/check-in-request" },
-    { label: "Leave Request", path: "/attendance/leave-request" },
-    { label: "Attendance Logs", path: "/attendance/attendance-logs" },
-    { label: "Adjustments", path: "/attendance/adjustments" },
-    { label: "Task Management", path: "/attendance/team" },
-    { label: "Members", path: "/attendance/members" },
-    { label: "Holidays", path: "/attendance/holidays" },
-  ];
-
-  // જો સબ-મેનૂનું કોઈ પેજ એક્ટિવ હોય તો Dropdown ઓટોમેટિકલી ઓપન રાખવા માટે
-  useEffect(() => {
-    const isAttendanceActive = attendanceItems.some(item => location.pathname === item.path);
-    if (isAttendanceActive) {
-      setAttendanceOpen(true);
+  const menuSections = [
+    {
+      title: "Overview",
+      items: [
+        { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+        { label: "Performance", path: "/performance", icon: Award },
+      ]
+    },
+    {
+      title: "Attendance & Leaves",
+      items: [
+        { label: "Attendance Logs", path: "/attendance/attendance-logs", icon: FileText },
+        { label: "Check-In Request", path: "/attendance/check-in-request", icon: UserCheck },
+        { label: "Leave Request", path: "/attendance/leave-request", icon: FileText },
+        { label: "Adjustments", path: "/attendance/adjustments", icon: Settings },
+        { label: "Holidays", path: "/attendance/holidays", icon: Calendar },
+      ]
+    },
+    {
+      title: "People & Organization",
+      items: [
+        { label: "Employees", path: "/attendance/employees", icon: Users },
+        { label: "Employee Requests", path: "/employee-requests", icon: UserCheck },
+        { label: "Members", path: "/attendance/members", icon: Users },
+        { label: "Team Lead", path: "/team-lead", icon: UserCheck },
+        { label: "Task Management", path: "/attendance/team", icon: Briefcase },
+      ]
+    },
+    {
+      title: "Recruitment & Leads",
+      items: [
+        { label: "Applications", path: "/applications", icon: FileText },
+        { label: "Positions", path: "/positions", icon: Briefcase },
+        { label: "Portfolio Leads", path: "/portfolio-leads", icon: UserCheck },
+        { label: "Contacts", path: "/contacts", icon: Users },
+      ]
+    },
+    {
+      title: "Account",
+      items: [
+        { label: "Profile", path: "/profile", icon: User },
+        { label: "Logout", path: "/logout", icon: LogOut },
+      ]
     }
-  }, [location.pathname]);
+  ];
 
-  // મોબાઈલ પર મેનૂ આઈટમ ક્લિક કરવાથી સાઈડબાર બંધ થઈ જશે
   const handleLinkClick = () => {
     setIsOpen(false);
   };
 
   return (
     <>
-      {/* Mobile Toggle Button */}
-      <div className="lg:hidden fixed top-0 left-0 w-full h-16 bg-white border-b px-4 flex items-center justify-between z-50">
-        <img src="/logo.jpeg" alt="Logo" className="h-10 object-contain" />
+      {/* Mobile Toggle Bar */}
+      <div className="lg:hidden fixed top-0 left-0 w-full h-14 bg-white border-b border-slate-200/80 px-4 flex items-center justify-between z-40 shadow-xs">
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Logo" className="h-8 object-contain rounded" />
+          <span className="font-semibold text-xs text-slate-800 tracking-tight">Kevalon Tech</span>
+        </div>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 focus:outline-none"
+          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
         >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
+          {isOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
       {/* Backdrop (Mobile only) */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-40 lg:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 left-0 h-screen w-72 bg-white border-r flex flex-col overflow-hidden z-50 transition-transform duration-300 ease-in-out
+        className={`fixed top-0 left-0 h-screen w-60 bg-white border-r border-slate-200/80 flex flex-col overflow-hidden z-50 transition-transform duration-200 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"} 
-          lg:translate-x-0 lg:z-30`}
+          lg:translate-x-0`}
       >
-        {/* Logo Section */}
-        <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100 flex-shrink-0">
-          <img
-            src="/logo.jpeg"
-            alt="Kevalon Technology"
-            className="h-12 object-contain"
-          />
-          {/* Mobile close button inside sidebar */}
-          <button onClick={() => setIsOpen(false)} className="lg:hidden text-gray-500 hover:text-gray-800">
-            <X size={20} />
+        {/* Logo Header */}
+        <div className="h-20 flex items-center justify-between px-5 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/logo.png"
+              alt="Kevalon Technology"
+              className="h-14 w-36 object-contain"
+            />
+          </div>
+          <button onClick={() => setIsOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-700">
+            <X size={18} />
           </button>
         </div>
 
         {/* Navigation Area */}
-        <nav className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-gray-200">
-          
-          {/* Main Menu */}
-          <div className="space-y-1">
-            <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Main</p>
-            {menu.slice(0, 5).map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.label}
-                  to={item.path}
-                  onClick={handleLinkClick}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium ${
-                      isActive
-                        ? "bg-blue-50 text-blue-600 font-semibold shadow-sm shadow-blue-100"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    }`
-                  }
-                >
-                  <Icon size={18} />
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </div>
+        <nav className="flex-1 overflow-y-auto p-3 space-y-4 text-xs scrollbar-thin">
+          {menuSections.map((section) => (
+            <div key={section.title} className="space-y-1">
+              <p className="px-2.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                {section.title}
+              </p>
+              {section.items.map((item) => {
+                const Icon = item.icon;
 
-          {/* Attendance Dropdown */}
-          <div className="space-y-1">
-            <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Management</p>
-            <button
-              onClick={() => setAttendanceOpen(!attendanceOpen)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
-            >
-              <span className="flex items-center gap-3">
-                <Users size={18} />
-                Attendance
-              </span>
-              {attendanceOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-
-            {attendanceOpen && (
-              <div className="mt-1 ml-4 pl-4 border-l border-gray-100 space-y-1 transition-all">
-                {attendanceItems.map((item) => (
+                return (
                   <NavLink
                     key={item.label}
                     to={item.path}
                     onClick={handleLinkClick}
                     className={({ isActive }) =>
-                      `block px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-                        isActive
-                          ? "bg-blue-50/70 text-blue-600 font-semibold"
-                          : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                      `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-all duration-150 text-xs ${
+                        item.label === "Logout"
+                          ? "text-rose-600 hover:bg-rose-50/80 font-medium"
+                          : isActive
+                          ? "bg-indigo-50/90 text-indigo-700 font-semibold border-l-2 border-indigo-600"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
                       }`
                     }
                   >
-                    {item.label}
+                    <Icon size={16} className="shrink-0" />
+                    <span className="truncate">{item.label}</span>
                   </NavLink>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Settings & Bottom Area */}
-          <div className="pt-4 border-t border-gray-100 space-y-1">
-            <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Account</p>
-            {menu.slice(5).map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.label}
-                  to={item.path}
-                  onClick={handleLinkClick}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium ${
-                      item.label === "Logout"
-                        ? "text-red-500 hover:bg-red-50"
-                        : isActive
-                        ? "bg-blue-50 text-blue-600 font-semibold"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    }`
-                  }
-                >
-                  <Icon size={18} />
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ))}
         </nav>
+
       </aside>
     </>
   );

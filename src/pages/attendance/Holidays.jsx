@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 
 const API_BASE = 'https://kt-backend-1.onrender.com/api/holiday';
 
@@ -25,6 +25,7 @@ export default function Holidays() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState('calendar');
   const [showModal, setShowModal] = useState(false);
+  const titleInputRef = useRef(null);
 
   const fetchHolidays = async () => {
     setLoading(true);
@@ -52,27 +53,35 @@ export default function Holidays() {
     fetchHolidays();
   }, []);
 
-  const resetForm = () => {
+  const resetForm = (shouldClose = true) => {
     setEditingId(null);
     setDate('');
     setTitle('');
     setError('');
-    setShowModal(false);
+    if (shouldClose) setShowModal(false);
+  };
+
+  const openAddHolidayModal = (selectedDate = '') => {
+    resetForm(false);
+    if (selectedDate) setDate(selectedDate);
+    setShowModal(true);
+    setTimeout(() => titleInputRef.current?.focus(), 50);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!date || !title) return alert('Please fill in both date and title!');
+    const trimmedTitle = title.trim();
+    if (!date || !trimmedTitle) return alert('Please fill in both date and title!');
 
     setIsSubmitting(true);
     setError('');
 
-    try {
-      const payload = {
-        holidayName: title,
-        holidayDate: date,
-      };
+    const payload = {
+      holidayName: trimmedTitle,
+      holidayDate: date,
+    };
 
+    try {
       const url = editingId ? `${API_BASE}/update/${editingId}` : `${API_BASE}/create`;
       const method = editingId ? 'PUT' : 'POST';
 
@@ -93,7 +102,7 @@ export default function Holidays() {
         responseData.data || responseData.holiday || responseData || {
           _id: editingId,
           holidayDate: date,
-          holidayName: title,
+          holidayName: trimmedTitle,
         }
       );
 
@@ -120,6 +129,7 @@ export default function Holidays() {
     setDate(holiday.date);
     setTitle(holiday.title);
     setShowModal(true);
+    setTimeout(() => titleInputRef.current?.focus(), 50);
   };
 
   const handleDelete = async (id) => {
@@ -274,7 +284,6 @@ export default function Holidays() {
     const days = [];
     const totalSlots = 42;
 
-    // Previous month days
     const prevMonthDate = new Date(year, month, 0);
     const prevMonthDays = prevMonthDate.getDate();
     for (let i = firstDay - 1; i >= 0; i--) {
@@ -294,7 +303,6 @@ export default function Holidays() {
       });
     }
 
-    // Current month days
     for (let day = 1; day <= daysInMonth; day++) {
       const d = new Date(year, month, day);
       const dateStr = formatDateKey(d);
@@ -312,7 +320,6 @@ export default function Holidays() {
       });
     }
 
-    // Next month days
     const remainingDays = totalSlots - days.length;
     for (let i = 1; i <= remainingDays; i++) {
       const d = new Date(year, month + 1, i);
@@ -342,11 +349,11 @@ export default function Holidays() {
     }).length;
 
     return (
-      <div className="bg-white border border-slate-300">
-        <div className="flex flex-col gap-3 px-4 py-3 bg-white border-b border-slate-300 sm:flex-row sm:items-center sm:justify-between">
+      <div className="bg-white border border-slate-300 rounded-lg sm:rounded-xl shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-3 px-3 sm:px-4 py-3 bg-white border-b border-slate-300 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Holiday Calendar</p>
-            <h2 className="text-lg font-bold text-slate-900">
+            <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">Holiday Calendar</p>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900">
               {monthNames[month]} <span className="font-normal text-slate-500">{year}</span>
             </h2>
           </div>
@@ -354,17 +361,17 @@ export default function Holidays() {
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentMonth(new Date(year, month - 1))}
-              className="inline-flex h-7 w-7 items-center justify-center border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 text-sm"
+              className="inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 rounded-md text-sm transition-colors"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <button
               onClick={() => setCurrentMonth(new Date(year, month + 1))}
-              className="inline-flex h-7 w-7 items-center justify-center border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 text-sm"
+              className="inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 rounded-md text-sm transition-colors"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -373,8 +380,9 @@ export default function Holidays() {
 
         <div className="grid grid-cols-7 bg-white border-b border-slate-300">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-            <div key={day} className="py-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-slate-200 last:border-r-0">
-              {day}
+            <div key={day} className="py-1.5 sm:py-2 text-center text-[9px] sm:text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-500 border-r border-slate-200 last:border-r-0">
+              <span className="hidden xs:inline">{day}</span>
+              <span className="xs:hidden">{day.charAt(0)}</span>
             </div>
           ))}
         </div>
@@ -396,16 +404,22 @@ export default function Holidays() {
             }
 
             return (
-              <div
+              <button
                 key={index}
-                className={`min-h-[65px] border ${dayBgClass} ${borderClass} p-1.5`}
+                type="button"
+                onClick={() => {
+                  if (day.isCurrentMonth) {
+                    openAddHolidayModal(day.dateStr);
+                  }
+                }}
+                className={`min-h-[55px] sm:min-h-[65px] md:min-h-[75px] border ${dayBgClass} ${borderClass} p-1 sm:p-1.5 text-left cursor-pointer hover:bg-slate-100 transition-colors`}
               >
                 <div className="flex items-center justify-between">
-                  <span className={`inline-flex h-6 w-6 items-center justify-center text-xs font-semibold ${day.isToday ? 'bg-orange-500 text-white' : day.isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}`}>
+                  <span className={`inline-flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center text-[10px] sm:text-xs font-semibold ${day.isToday ? 'bg-orange-500 text-white rounded-full' : day.isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}`}>
                     {day.day}
                   </span>
                   {day.isToday && (
-                    <span className="bg-orange-100 px-1.5 py-0.5 text-[8px] font-semibold text-orange-700 border border-orange-200">
+                    <span className="hidden sm:inline-block bg-orange-100 px-1.5 py-0.5 text-[8px] font-semibold text-orange-700 border border-orange-200 rounded">
                       Today
                     </span>
                   )}
@@ -413,35 +427,37 @@ export default function Holidays() {
 
                 <div className="mt-0.5">
                   {day.isCurrentMonth && day.hasHoliday && day.holidayTitle && (
-                    <p className="text-[10px] font-semibold text-slate-700 leading-tight">{day.holidayTitle}</p>
+                    <p className="text-[8px] sm:text-[9px] md:text-[10px] font-semibold text-slate-700 leading-tight truncate">
+                      {day.holidayTitle}
+                    </p>
                   )}
                   {!day.isCurrentMonth && (
-                    <p className="text-[8px] font-semibold text-slate-400">Other</p>
+                    <p className="text-[7px] sm:text-[8px] font-semibold text-slate-400">Other</p>
                   )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
 
-        <div className="flex flex-wrap gap-3 px-4 py-2 bg-white border-t border-slate-300 sm:items-center text-xs">
+        <div className="flex flex-wrap gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 bg-white border-t border-slate-300 sm:items-center text-[10px] sm:text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 bg-blue-500"></div>
-            <span className="text-xs font-medium text-slate-600">Holiday</span>
+            <div className="h-2.5 w-2.5 bg-blue-500 rounded-sm"></div>
+            <span className="text-[10px] sm:text-xs font-medium text-slate-600">Holiday</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 bg-slate-300"></div>
-            <span className="text-xs font-medium text-slate-600">Sat (2nd/4th)</span>
+            <div className="h-2.5 w-2.5 bg-slate-300 rounded-sm"></div>
+            <span className="text-[10px] sm:text-xs font-medium text-slate-600">Sat (2nd/4th)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 bg-slate-400"></div>
-            <span className="text-xs font-medium text-slate-600">Sunday</span>
+            <div className="h-2.5 w-2.5 bg-slate-400 rounded-sm"></div>
+            <span className="text-[10px] sm:text-xs font-medium text-slate-600">Sunday</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 bg-orange-500"></div>
-            <span className="text-xs font-medium text-slate-600">Today</span>
+            <div className="h-2.5 w-2.5 bg-orange-500 rounded-sm"></div>
+            <span className="text-[10px] sm:text-xs font-medium text-slate-600">Today</span>
           </div>
-          <div className="ml-auto text-xs font-semibold text-slate-700">
+          <div className="ml-auto text-[10px] sm:text-xs font-semibold text-slate-700">
             {holidayCount} holiday{holidayCount === 1 ? '' : 's'}
           </div>
         </div>
@@ -449,79 +465,86 @@ export default function Holidays() {
     );
   };
 
-  // Modal component
   const HolidayModal = () => {
     if (!showModal) return null;
 
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto">
-        <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div className="flex items-center justify-center min-h-screen px-3 sm:px-4 pt-4 pb-20 text-center sm:block sm:p-0">
           <div className="fixed inset-0 transition-opacity" aria-hidden="true">
             <div className="absolute inset-0 bg-slate-900/75" onClick={resetForm}></div>
           </div>
 
           <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-          <div className="inline-block align-bottom bg-white text-left shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-slate-300">
-            <div className="bg-white px-5 pt-4 pb-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <div className="inline-block align-bottom bg-white text-left shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full w-full max-w-md border border-slate-300 rounded-lg sm:rounded-xl">
+            <div className="bg-white px-4 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                   {editingId ? 'Edit Holiday' : 'Add New Holiday'}
                 </h3>
                 <button
                   onClick={resetForm}
-                  className="text-slate-400 hover:text-slate-600"
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
               {error && (
-                <div className="mb-3 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="mb-3 sm:mb-4 border border-red-300 bg-red-50 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm text-red-700">
                   {error}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-3">
+              <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-0.5">Select Date</label>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-1.5">Select Date</label>
                   <input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full border border-slate-300 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-900"
+                    className="w-full border border-slate-300 p-2 sm:p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent rounded-lg bg-white text-slate-900 transition-all"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-0.5">Holiday Title</label>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-1.5">Holiday Title</label>
                   <input
+                    ref={titleInputRef}
                     type="text"
                     placeholder="e.g. Diwali, Christmas..."
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full border border-slate-300 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-900"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && title.trim()) {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }
+                    }}
+                    className="w-full border border-slate-300 p-2 sm:p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent rounded-lg bg-white text-slate-900 transition-all"
                     required
+                    autoFocus
                   />
                 </div>
 
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isSubmitting ? 'Saving...' : editingId ? 'Update Holiday' : 'Add Holiday'}
-                  </button>
+                <div className="flex flex-col-reverse sm:flex-row gap-2 pt-2 sm:pt-4">
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 px-4 text-sm"
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 sm:py-3 px-4 text-sm rounded-lg transition-colors"
                   >
                     Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 sm:py-3 px-4 text-sm rounded-lg disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
+                  >
+                    {isSubmitting ? 'Saving...' : editingId ? 'Update Holiday' : 'Add Holiday'}
                   </button>
                 </div>
               </form>
@@ -533,83 +556,82 @@ export default function Holidays() {
   };
 
   return (
-    <div className="p-4 max-w-full mx-auto">
-      {/* Header */}
-      <div className="mb-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+    <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <span>📅</span> Holiday Calendar
           </h1>
-          <p className="text-sm text-slate-500">Manage holiday schedules and office closure dates</p>
+          <p className="text-xs sm:text-sm text-slate-500">Manage holiday schedules and office closure dates</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setView('calendar')}
-            className={`px-3 py-1.5 text-sm font-medium border border-slate-300 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium border border-slate-300 rounded-lg transition-all ${
               view === 'calendar'
                 ? 'bg-slate-900 text-white'
                 : 'bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
-            Calendar View
+            <span className="hidden xs:inline">Calendar View</span>
+            <span className="xs:hidden">Calendar</span>
           </button>
           <button
             onClick={() => setView('list')}
-            className={`px-3 py-1.5 text-sm font-medium border border-slate-300 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium border border-slate-300 rounded-lg transition-all ${
               view === 'list'
                 ? 'bg-slate-900 text-white'
                 : 'bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
-            List View
+            <span className="hidden xs:inline">List View</span>
+            <span className="xs:hidden">List</span>
           </button>
           <button
             onClick={() => {
-              resetForm();
-              setShowModal(true);
+              openAddHolidayModal();
             }}
-            className="px-3 py-1.5 text-sm font-medium border border-slate-300 bg-blue-600 text-white hover:bg-blue-700"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium border border-slate-300 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-all"
           >
-            Add Holiday
+            <span className="hidden xs:inline">Add Holiday</span>
+            <span className="xs:hidden">+ Add</span>
           </button>
         </div>
       </div>
 
       <div>
-        {/* Calendar/List Panel */}
         <div className="w-full">
           {loading ? (
-            <div className="bg-white border border-slate-300 p-8 text-center">
+            <div className="bg-white border border-slate-300 rounded-lg sm:rounded-xl p-8 text-center">
               <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 animate-spin"></div>
-                <p className="text-slate-500 font-medium text-sm">Loading holidays...</p>
+                <div className="w-8 h-8 sm:w-10 sm:h-10 border-4 border-blue-200 border-t-blue-600 animate-spin rounded-full"></div>
+                <p className="text-slate-500 font-medium text-xs sm:text-sm">Loading holidays...</p>
               </div>
             </div>
           ) : view === 'calendar' ? (
             renderCalendar()
           ) : (
-            /* List View */
-            <div className="bg-white border border-slate-300">
-              <div className="px-4 py-2.5 bg-white border-b border-slate-300">
-                <h2 className="text-sm font-bold text-slate-800">
+            <div className="bg-white border border-slate-300 rounded-lg sm:rounded-xl shadow-sm overflow-hidden">
+              <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-b border-slate-300">
+                <h2 className="text-sm sm:text-base font-bold text-slate-800">
                   Holiday List ({holidays.length})
                 </h2>
               </div>
 
               {sortedHolidays.length === 0 ? (
-                <div className="text-center py-10">
-                  <div className="text-4xl mb-2">🎉</div>
-                  <p className="text-slate-400 text-sm font-medium">No holidays added yet. Add a new holiday!</p>
+                <div className="text-center py-8 sm:py-12">
+                  <div className="text-4xl sm:text-5xl mb-2">🎉</div>
+                  <p className="text-slate-400 text-xs sm:text-sm font-medium">No holidays added yet. Add a new holiday!</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-600 border-b border-slate-300">
+                  <table className="w-full text-xs sm:text-sm">
+                    <thead className="bg-slate-50 text-[10px] sm:text-xs font-bold uppercase text-slate-600 border-b border-slate-300">
                       <tr>
-                        <th className="px-4 py-2 text-left">Date</th>
-                        <th className="px-4 py-2 text-left">Holiday Name</th>
-                        <th className="px-4 py-2 text-right">Actions</th>
+                        <th className="px-3 sm:px-4 py-2 text-left">Date</th>
+                        <th className="px-3 sm:px-4 py-2 text-left">Holiday Name</th>
+                        <th className="px-3 sm:px-4 py-2 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
@@ -618,8 +640,8 @@ export default function Holidays() {
                         const holidayDate = new Date(hYear, hMonth - 1, hDay);
                         const isWeekend = holidayDate.getDay() === 0 || isSecondOrFourthSaturday(holidayDate);
                         return (
-                          <tr key={holiday.id} className={`${isWeekend ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
-                            <td className="px-4 py-2.5 font-medium text-slate-900 whitespace-nowrap">
+                          <tr key={holiday.id} className={`${isWeekend ? 'bg-slate-100' : 'hover:bg-slate-50'} transition-colors`}>
+                            <td className="px-3 sm:px-4 py-2.5 font-medium text-slate-900 whitespace-nowrap text-[11px] sm:text-sm">
                               {holiday.date
                                 ? holidayDate.toLocaleDateString('en-US', {
                                     day: '2-digit',
@@ -628,32 +650,34 @@ export default function Holidays() {
                                   })
                                 : '-'}
                             </td>
-                            <td className="px-4 py-2.5">
+                            <td className="px-3 sm:px-4 py-2.5">
                               <span className="inline-flex items-center gap-2">
                                 <img
                                   src={getHolidayPhoto(holiday.title).src}
                                   alt={getHolidayPhoto(holiday.title).alt}
-                                  className="h-6 w-6 object-cover border border-slate-300"
+                                  className="h-5 w-5 sm:h-6 sm:w-6 object-cover border border-slate-300 rounded"
                                 />
-                                <span className="text-slate-700 font-medium">{holiday.title}</span>
+                                <span className="text-slate-700 font-medium text-[11px] sm:text-sm truncate max-w-[100px] sm:max-w-[200px]">
+                                  {holiday.title}
+                                </span>
                                 {isWeekend && (
-                                  <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 border border-slate-300">
+                                  <span className="hidden xs:inline-block text-[9px] sm:text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 border border-slate-300 rounded">
                                     Weekend
                                   </span>
                                 )}
                               </span>
                             </td>
-                            <td className="px-4 py-2.5 text-right">
-                              <div className="flex justify-end gap-2">
+                            <td className="px-3 sm:px-4 py-2.5 text-right">
+                              <div className="flex justify-end gap-1.5 sm:gap-2">
                                 <button
                                   onClick={() => handleEdit(holiday)}
-                                  className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                                  className="text-blue-600 hover:text-blue-800 font-medium text-[11px] sm:text-sm transition-colors"
                                 >
                                   Edit
                                 </button>
                                 <button
                                   onClick={() => handleDelete(holiday.id)}
-                                  className="text-red-500 hover:text-red-700 font-medium text-sm"
+                                  className="text-red-500 hover:text-red-700 font-medium text-[11px] sm:text-sm transition-colors"
                                 >
                                   Delete
                                 </button>
@@ -671,7 +695,6 @@ export default function Holidays() {
         </div>
       </div>
 
-      {/* Holiday Modal */}
       <HolidayModal />
     </div>
   );
