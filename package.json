@@ -2,8 +2,8 @@
   "name": "admin",
   "version": "0.1.0",
   "private": true,
-   "engines": {
-    "node": "18.x",
+  "engines": {
+    "node": "18.20.8",
     "npm": "10.x"
   },
   "dependencies": {
@@ -15,8 +15,8 @@
     "axios": "^1.18.1",
     "lucide-react": "^1.22.0",
     "postcss": "^8.5.16",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "react-router-dom": "^7.18.0",
     "react-scripts": "5.0.1",
     "tailwindcss": "^3.4.4",
