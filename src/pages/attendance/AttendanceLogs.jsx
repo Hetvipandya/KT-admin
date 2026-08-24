@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowUpDown,
   FileSpreadsheet,
+  X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -26,6 +27,8 @@ const AVATAR_COLORS = [
   'bg-indigo-600',
   'bg-teal-600',
 ];
+
+const WORKDAY_MINUTES = 9 * 60;
 
 /* =========================================================
    GET TODAY
@@ -167,8 +170,6 @@ const mapLog = (item, index) => {
       ? [item.breaks]
       : [];
 
-  const firstBreak = breaks[0] || {};
-
   return {
     id: item?._id || item?.id || `log-${index}`,
 
@@ -204,17 +205,7 @@ const mapLog = (item, index) => {
       item?.punchOut ||
       '',
 
-    breakStart:
-      firstBreak?.startTime ||
-      firstBreak?.startTimeFullDisplay ||
-      firstBreak?.startTimeDisplay ||
-      '',
-
-    breakEnd:
-      firstBreak?.endTime ||
-      firstBreak?.endTimeFullDisplay ||
-      firstBreak?.endTimeDisplay ||
-      '',
+    breaks,
 
     totalHours:
       item?.totalWorkTimeDisplay ||
@@ -301,101 +292,142 @@ const parseTimeToMinutes = (timeStr) => {
   return null;
 };
 
+const formatMinutes = (minutes) => {
+  return `${String(Math.floor(minutes / 60)).padStart(
+    2,
+    '0'
+  )}:${String(minutes % 60).padStart(2, '0')}`;
+};
+
+const formatDuration = (minutes) => {
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return '0m';
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return `${hours > 0 ? `${hours}h ` : ''}${remainingMinutes}m`.trim();
+};
+
 /* =========================================================
    ATTENDANCE TIMELINE CALCULATION
 ========================================================= */
 const calculateAttendanceProgress = (
   checkIn,
-  breakStart,
-  breakEnd,
+  breaks = [],
   checkOut
 ) => {
   const checkInMinutes = parseTimeToMinutes(checkIn);
-  const breakStartMinutes = parseTimeToMinutes(breakStart);
-  const breakEndMinutes = parseTimeToMinutes(breakEnd);
   const checkOutMinutes = parseTimeToMinutes(checkOut);
 
   if (checkInMinutes === null) {
     return [];
   }
 
-  let effectiveBreakEnd = breakEndMinutes;
+  const now = new Date();
+  const currentMinutes =
+    now.getHours() * 60 + now.getMinutes();
 
-  if (
-    effectiveBreakEnd === null &&
+  const activeEnd = Math.min(
     checkOutMinutes !== null
-  ) {
-    effectiveBreakEnd = checkOutMinutes;
+      ? checkOutMinutes
+      : currentMinutes,
+    checkInMinutes + WORKDAY_MINUTES
+  );
+
+  if (activeEnd <= checkInMinutes) {
+    return [];
   }
 
   const segments = [];
   let currentTime = checkInMinutes;
 
-  if (
-    breakStartMinutes !== null &&
-    breakStartMinutes > currentTime
-  ) {
-    segments.push({
-      start: currentTime,
-      end: breakStartMinutes,
-      color: 'blue',
-      label: 'Working',
-      startTime: formatTime(checkIn),
-      endTime: formatTime(breakStart),
-    });
-
-    currentTime = breakStartMinutes;
-  } else if (
-    breakStartMinutes === null &&
-    checkOutMinutes !== null &&
-    checkOutMinutes > currentTime
-  ) {
-    segments.push({
-      start: currentTime,
-      end: checkOutMinutes,
-      color: 'blue',
-      label: 'Working',
-      startTime: formatTime(checkIn),
-      endTime: formatTime(checkOut),
-    });
-
-    currentTime = checkOutMinutes;
-  }
-
-  if (
-    breakStartMinutes !== null &&
-    effectiveBreakEnd !== null &&
-    effectiveBreakEnd > breakStartMinutes
-  ) {
-    segments.push({
-      start: breakStartMinutes,
-      end: effectiveBreakEnd,
-      color: 'yellow',
-      label: 'Break',
-      startTime: formatTime(breakStart),
-      endTime: formatTime(breakEnd || checkOut),
-    });
-
-    currentTime = effectiveBreakEnd;
-  }
-
-  if (
-    checkOutMinutes !== null &&
-    checkOutMinutes > currentTime
-  ) {
-    segments.push({
-      start: currentTime,
-      end: checkOutMinutes,
-      color: 'gray',
-      label: 'Inactive',
-      startTime: formatTime(
-        currentTime === breakStartMinutes
-          ? breakStart
-          : currentTime
+  const normalizedBreaks = breaks
+    .map((item) => ({
+      start: parseTimeToMinutes(
+        item?.startTime ||
+          item?.startTimeFullDisplay ||
+          item?.startTimeDisplay
       ),
-      endTime: formatTime(checkOut),
-    });
-  }
+      end: parseTimeToMinutes(
+        item?.endTime ||
+          item?.endTimeFullDisplay ||
+          item?.endTimeDisplay
+      ),
+    }))
+    .filter(
+      (item) =>
+        item.start !== null &&
+        item.start >= checkInMinutes &&
+        item.start < activeEnd
+    )
+    .sort((a, b) => a.start - b.start);
+
+  const addSegment = (
+    start,
+    end,
+    color,
+    label,
+    startTime,
+    endTime
+  ) => {
+    if (end > start) {
+      segments.push({
+        start,
+        end,
+        color,
+        label,
+        startTime,
+        endTime,
+      });
+    }
+  };
+
+  normalizedBreaks.forEach((breakItem) => {
+    const breakEnd = Math.min(
+      breakItem.end ?? activeEnd,
+      activeEnd
+    );
+
+    if (breakItem.start > currentTime) {
+      addSegment(
+        currentTime,
+        breakItem.start,
+        'blue',
+        'Working',
+        currentTime === checkInMinutes
+          ? formatTime(checkIn)
+          : formatMinutes(currentTime),
+        formatMinutes(breakItem.start)
+      );
+    }
+
+    if (breakEnd > breakItem.start) {
+      addSegment(
+        breakItem.start,
+        breakEnd,
+        'yellow',
+        'Break',
+        formatMinutes(breakItem.start),
+        formatMinutes(breakEnd)
+      );
+      currentTime = breakEnd;
+    }
+  });
+
+  addSegment(
+    currentTime,
+    activeEnd,
+    'blue',
+    'Working',
+    currentTime === checkInMinutes
+      ? formatTime(checkIn)
+      : formatMinutes(currentTime),
+    checkOutMinutes !== null && activeEnd === checkOutMinutes
+      ? formatTime(checkOut)
+      : formatMinutes(activeEnd)
+  );
 
   return segments;
 };
@@ -405,14 +437,12 @@ const calculateAttendanceProgress = (
 ========================================================= */
 const AttendanceTimeline = ({
   checkIn,
-  breakStart,
-  breakEnd,
+  breaks,
   checkOut,
 }) => {
   const segments = calculateAttendanceProgress(
     checkIn,
-    breakStart,
-    breakEnd,
+    breaks,
     checkOut
   );
 
@@ -429,9 +459,7 @@ const AttendanceTimeline = ({
     );
   }
 
-  const totalDuration =
-    segments[segments.length - 1].end -
-    segments[0].start;
+  const totalDuration = WORKDAY_MINUTES;
 
   if (totalDuration <= 0) {
     return (
@@ -537,8 +565,8 @@ const AttendanceTimeline = ({
           const isHovered =
             localHoveredSegment === idx;
 
-          return (
-            <div
+          return ( 
+            <div 
               key={idx}
               className={`
                 ${getColorClass(segment.color)}
@@ -601,8 +629,7 @@ const AttendanceTimeline = ({
       <div className="flex justify-between text-xs font-medium text-gray-600 mt-2">
         <span>📥 Check-in</span>
 
-        {breakStart &&
-          breakStart !== '—' && (
+        {breaks?.length > 0 && (
             <span>☕ Break</span>
           )}
 
@@ -644,6 +671,9 @@ export default function AttendanceLogs() {
 
   const [sortOrder, setSortOrder] =
     useState('desc');
+
+  const [selectedLog, setSelectedLog] =
+    useState(null);
 
   const token =
     localStorage.getItem('token');
@@ -733,6 +763,26 @@ export default function AttendanceLogs() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!selectedLog) {
+      return undefined;
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setSelectedLog(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = '';
+    };
+  }, [selectedLog]);
 
   /* =========================================================
      STATUS ICON
@@ -1012,12 +1062,24 @@ export default function AttendanceLogs() {
             'Check In': formatTime(
               log.checkIn
             ),
-            'Break Start': formatTime(
-              log.breakStart
-            ),
-            'Break End': formatTime(
-              log.breakEnd
-            ),
+            'Break Start': (log.breaks || [])
+              .map((breakItem) =>
+                formatTime(
+                  breakItem?.startTime ||
+                    breakItem?.startTimeFullDisplay ||
+                    breakItem?.startTimeDisplay
+                )
+              )
+              .join(', '),
+            'Break End': (log.breaks || [])
+              .map((breakItem) =>
+                formatTime(
+                  breakItem?.endTime ||
+                    breakItem?.endTimeFullDisplay ||
+                    breakItem?.endTimeDisplay
+                )
+              )
+              .join(', '),
             'Check Out': formatTime(
               log.checkOut
             ),
@@ -1057,6 +1119,30 @@ export default function AttendanceLogs() {
         'Failed to export data'
       );
     }
+  };
+
+  const getLogDetails = (log) => {
+    const segments = calculateAttendanceProgress(
+      log.checkIn,
+      log.breaks,
+      log.checkOut
+    );
+
+    const workingMinutes = segments
+      .filter((segment) => segment.color === 'blue')
+      .reduce(
+        (total, segment) => total + segment.end - segment.start,
+        0
+      );
+
+    const breakMinutes = segments
+      .filter((segment) => segment.color === 'yellow')
+      .reduce(
+        (total, segment) => total + segment.end - segment.start,
+        0
+      );
+
+    return { segments, workingMinutes, breakMinutes };
   };
 
   /* =========================================================
@@ -1502,7 +1588,8 @@ export default function AttendanceLogs() {
                       return (
                         <tr
                           key={log.id}
-                          className="hover:bg-gray-50"
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => setSelectedLog(log)}
                         >
 
                           <td className="px-3 py-3 text-sm font-medium text-gray-500">
@@ -1547,12 +1634,7 @@ export default function AttendanceLogs() {
                               checkIn={
                                 log.checkIn
                               }
-                              breakStart={
-                                log.breakStart
-                              }
-                              breakEnd={
-                                log.breakEnd
-                              }
+                              breaks={log.breaks}
                               checkOut={
                                 log.checkOut
                               }
@@ -1574,7 +1656,7 @@ export default function AttendanceLogs() {
                                 log.status
                               )}`}
                             >
-                              {icon}
+                              {icon} 
                             </span>
 
                           </td>
@@ -1606,7 +1688,8 @@ export default function AttendanceLogs() {
                     return (
                       <div
                         key={log.id}
-                        className="border border-gray-200 p-3 sm:p-4"
+                        className="border border-gray-200 p-3 sm:p-4 cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => setSelectedLog(log)}
                       >
 
                         <div className="flex items-start justify-between">
@@ -1662,12 +1745,7 @@ export default function AttendanceLogs() {
                             checkIn={
                               log.checkIn
                             }
-                            breakStart={
-                              log.breakStart
-                            }
-                            breakEnd={
-                              log.breakEnd
-                            }
+                            breaks={log.breaks}
                             checkOut={
                               log.checkOut
                             }
@@ -1735,6 +1813,111 @@ export default function AttendanceLogs() {
           </div>
         )}
       </div>
+
+      {selectedLog && (() => {
+        const {
+          segments,
+          workingMinutes,
+          breakMinutes,
+        } = getLogDetails(selectedLog);
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-6 backdrop-blur-sm"
+            role="presentation"
+            onClick={() => setSelectedLog(null)}
+          >
+            <div
+              className="max-w-lg max-h-[90vh] overflow-y-auto bg-white shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="attendance-details-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className={`h-10 w-10 ${selectedLog.avatarColor} flex flex-shrink-0 items-center justify-center text-sm font-bold text-white`}>
+                    {getInitials(selectedLog.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 id="attendance-details-title" className="truncate text-lg font-bold text-gray-800">
+                      {selectedLog.name}
+                    </h2>
+                    <p className="truncate text-xs text-gray-500">
+                      {formatIndianDate(selectedLog.date)}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedLog(null)}
+                  aria-label="Close attendance details"
+                  className="flex-shrink-0 p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 px-4 py-5 sm:px-6">
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`inline-flex items-center border px-2.5 py-1 text-xs font-semibold capitalize ${getStatusStyle(selectedLog.status)}`}>
+                    {selectedLog.status}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    Total: <strong className="text-gray-800">{selectedLog.totalHours}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="border border-emerald-200 bg-emerald-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase text-emerald-700">Check In</p>
+                    <p className="mt-1 text-sm font-bold text-emerald-800">{formatTime(selectedLog.checkIn)}</p>
+                  </div>
+                  <div className="border border-rose-200 bg-rose-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase text-rose-700">Check Out</p>
+                    <p className="mt-1 text-sm font-bold text-rose-800">{formatTime(selectedLog.checkOut)}</p>
+                  </div>
+                  <div className="border border-blue-200 bg-blue-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase text-blue-700">Working</p>
+                    <p className="mt-1 text-sm font-bold text-blue-800">{formatDuration(workingMinutes)}</p>
+                  </div>
+                  <div className="border border-yellow-200 bg-yellow-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase text-yellow-700">Break</p>
+                    <p className="mt-1 text-sm font-bold text-yellow-800">{formatDuration(breakMinutes)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-800">Time Details</h3>
+                  {segments.length > 0 ? (
+                    <div className="divide-y divide-gray-100 border border-gray-200">
+                      {segments.map((segment, index) => (
+                        <div key={`${segment.label}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs sm:px-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2.5 w-2.5 rounded-full ${segment.color === 'yellow' ? 'bg-yellow-400' : 'bg-blue-500'}`} />
+                            <span className="font-medium text-gray-700">{segment.label}</span>
+                          </div>
+                          <span className="text-gray-500">
+                            {segment.startTime} - {segment.endTime}
+                            <span className="ml-2 font-semibold text-gray-700">
+                              ({formatDuration(segment.end - segment.start)})
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="border border-gray-200 px-3 py-4 text-center text-xs text-gray-500">
+                      No timeline data available
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

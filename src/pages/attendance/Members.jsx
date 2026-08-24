@@ -125,7 +125,7 @@ const getAttendanceName = (record) => {
 const getAttendanceEmail = (record) => {
   return record?.email || record?.employee?.email || record?.user?.email || '';
 };
-
+ 
 const getAttendanceId = (record) => {
   return record?.employeeID || record?.employeeId || record?.employee?._id || record?.user?._id || record?.employee?._id || record?.id || record?._id || '';
 };
@@ -267,106 +267,449 @@ export default function Members() {
   useEffect(() => {
     let isMounted = true;
 
-    const fetchAllMembers = async () => {
-      setLoading(true);
-      setError('');
+const fetchAllMembers = async () => {
+  setLoading(true);
+  setError('');
 
-      try {
-        const token = localStorage.getItem('token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  try {
+    const token = localStorage.getItem('token');
 
-        const usersRes = await fetch('https://kt-backend-1.onrender.com/api/users/all', { headers });
+    const headers = token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
 
-        if (!usersRes.ok) throw new Error('Failed to fetch users');
+    // ==========================================
+    // FETCH USERS
+    // ==========================================
+    const usersRes = await fetch(
+      'https://kt-backend-1.onrender.com/api/users/all',
+      { headers }
+    );
 
-        const usersData = await usersRes.json();
-        const usersList = usersData?.users || usersData?.data || usersData || [];
+    if (!usersRes.ok) {
+      throw new Error('Failed to fetch users');
+    }
 
-        const formatDate = (dateStr) => {
-          if (!dateStr) return 'N/A';
-          const date = new Date(dateStr);
-          return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-GB');
-        };
+    const usersData = await usersRes.json();
 
-        const allMembers = usersList
-          .filter((user) => {
-            const role = String(user?.role || user?.userRole || '').toLowerCase().trim();
-            return role && role !== 'admin';
-          })
-          .map((user, index) => {
-            const role = String(user?.role || user?.userRole || '').toLowerCase().trim();
-            const roleType = role === 'intern'
-              ? 'intern'
-              : role === 'teamlead' || role === 'team lead' || role === 'team_lead' || role === 'tl'
-              ? 'tl'
-              : 'employee';
+    const usersList =
+      usersData?.users ||
+      usersData?.data ||
+      usersData ||
+      [];
 
-            const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'Unnamed User';
+    // ==========================================
+    // FETCH EMPLOYEES
+    // ==========================================
+    const employeesRes = await fetch(
+      'https://kt-backend-1.onrender.com/api/employee/list',
+      { headers }
+    );
 
-            let designation = roleType === 'intern'
-              ? 'Intern'
-              : roleType === 'tl'
-              ? 'Team Lead'
-              : 'Employee';
+    let employeesList = [];
 
-            if (typeof user?.designation === 'object' && user?.designation?.designationName) {
-              designation = user.designation.designationName;
-            } else if (user?.designationName) {
-              designation = user.designationName;
-            } else if (user?.designation) {
-              designation = typeof user.designation === 'string' ? user.designation : designation;
-            }
+    if (employeesRes.ok) {
+      const employeesData = await employeesRes.json();
 
-            let department = 'Unassigned';
-            if (typeof user?.department === 'object' && user?.department?.departmentName) {
-              department = user.department.departmentName;
-            } else if (user?.departmentName) {
-              department = user.departmentName;
-            } else if (user?.department) {
-              department = typeof user.department === 'string' ? user.department : 'Unassigned';
-            }
+      employeesList =
+        employeesData?.employees ||
+        employeesData?.data ||
+        employeesData?.employeesList ||
+        employeesData ||
+        [];
+    }
 
-            return {
-              id: user?._id || user?.id || `${roleType}-${index}`,
-              employeeId: user?.employeeID || user?.employeeId || `${roleType.toUpperCase()}${String(index + 1).padStart(4, '0')}`,
-              name: fullName,
-              email: user?.email || 'No email',
-              mobile: user?.mobile || 'N/A',
-              gender: user?.gender || 'N/A',
-              dob: formatDate(user?.dob || user?.dateOfBirth),
-              bloodGroup: user?.bloodGroup || 'N/A',
-              currentAddress: user?.currentAddress || 'N/A',
-              permanentAddress: user?.permanentAddress || 'N/A',
-              designation,
-              department,
-              status: user?.employeeStatus || user?.status || 'Active',
-              currentAction: user?.currentAction || 'Available',
-              skills: Array.isArray(user?.skills) ? user.skills : [],
-              initials: getInitials(fullName),
-              avatarColor: getAvatarColor(index),
-              joiningDate: formatDate(user?.joiningDate),
-              roleType
-            };
-          });
-        
-        if (isMounted) {
-          setMembers(allMembers);
-          setFilteredMembers(allMembers);
-        }
+    console.log('USERS:', usersList);
+    console.log('EMPLOYEES:', employeesList);
 
-      } catch (err) {
-        console.error('❌ Error fetching members:', err);
-        if (isMounted) {
-          setError(err.message || 'Unable to load team members.');
-          setMembers([]);
-          setFilteredMembers([]);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+    // ==========================================
+    // HELPERS
+    // ==========================================
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'N/A';
+
+      const date = new Date(dateStr);
+
+      return isNaN(date.getTime())
+        ? 'N/A'
+        : date.toLocaleDateString('en-GB');
     };
+
+    const normalize = (value) =>
+      value === null || value === undefined
+        ? ''
+        : String(value).trim().toLowerCase();
+
+    // ==========================================
+    // FIND EMPLOYEE FOR USER
+    // ==========================================
+    const findEmployee = (user) => {
+      const userId = normalize(
+        user?._id ||
+        user?.id ||
+        user?.userID ||
+        user?.userId
+      );
+
+      const employeeId = normalize(
+        user?.employeeID ||
+        user?.employeeId
+      );
+
+      const email = normalize(user?.email);
+
+      return employeesList.find((employee) => {
+
+        const employeeUserId = normalize(
+          employee?.userID?._id ||
+          employee?.userID ||
+          employee?.userId?._id ||
+          employee?.userId
+        );
+
+        const employeeIdValue = normalize(
+          employee?.employeeID ||
+          employee?.employeeId
+        );
+
+        const employeeEmail = normalize(
+          employee?.email ||
+          employee?.userID?.email ||
+          employee?.userId?.email
+        );
+
+        return (
+          (userId && employeeUserId && userId === employeeUserId) ||
+          (employeeId && employeeIdValue && employeeId === employeeIdValue) ||
+          (email && employeeEmail && email === employeeEmail)
+        );
+      });
+    };
+
+    // ==========================================
+    // BUILD MEMBERS
+    // ==========================================
+    const allMembers = usersList
+      .filter((user) => {
+        const role = String(
+          user?.role ||
+          user?.userRole ||
+          ''
+        )
+          .toLowerCase()
+          .trim();
+
+        return role && role !== 'admin';
+      })
+      .map((user, index) => {
+
+        // --------------------------------------
+        // FIND EMPLOYEE RECORD
+        // --------------------------------------
+        const employee = findEmployee(user);
+
+        console.log(
+          'USER:',
+          user?.email,
+          'EMPLOYEE:',
+          employee
+        );
+
+        const role = String(
+          user?.role ||
+          user?.userRole ||
+          employee?.role ||
+          ''
+        )
+          .toLowerCase()
+          .trim();
+
+        const roleType =
+          role === 'intern'
+            ? 'intern'
+            : role === 'teamlead' ||
+              role === 'team lead' ||
+              role === 'team_lead' ||
+              role === 'tl'
+            ? 'tl'
+            : 'employee';
+
+        // --------------------------------------
+        // NAME
+        // --------------------------------------
+        const fullName =
+          [
+            employee?.firstName || user?.firstName,
+            employee?.lastName || user?.lastName
+          ]
+            .filter(Boolean)
+            .join(' ') ||
+          employee?.name ||
+          user?.name ||
+          'Unnamed User';
+
+        // --------------------------------------
+        // DESIGNATION
+        // --------------------------------------
+        let designation =
+          roleType === 'intern'
+            ? 'Intern'
+            : roleType === 'tl'
+            ? 'Team Lead'
+            : 'Employee';
+
+        if (employee?.designation) {
+          if (
+            typeof employee.designation === 'object'
+          ) {
+            designation =
+              employee.designation?.designationName ||
+              employee.designation?.name ||
+              designation;
+          } else {
+            designation = employee.designation;
+          }
+        }
+
+        if (employee?.designationName) {
+          designation = employee.designationName;
+        }
+
+        if (user?.designation) {
+          if (
+            typeof user.designation === 'object'
+          ) {
+            designation =
+              user.designation?.designationName ||
+              user.designation?.name ||
+              designation;
+          } else {
+            designation = user.designation;
+          }
+        }
+
+        if (user?.designationName) {
+          designation = user.designationName;
+        }
+
+        // --------------------------------------
+        // DEPARTMENT
+        // --------------------------------------
+        let department = 'Unassigned';
+
+        const departmentValue =
+          employee?.department ||
+          employee?.departmentName ||
+          user?.department ||
+          user?.departmentName;
+
+        if (
+          typeof departmentValue === 'object'
+        ) {
+          department =
+            departmentValue?.departmentName ||
+            departmentValue?.name ||
+            'Unassigned';
+        } else if (departmentValue) {
+          department = departmentValue;
+        }
+
+        // --------------------------------------
+        // PERSONAL DETAILS
+        // EMPLOYEE FIRST, USER FALLBACK
+        // --------------------------------------
+        const gender =
+          employee?.gender ||
+          user?.gender ||
+          'N/A';
+
+        const dob =
+          employee?.dob ||
+          employee?.dateOfBirth ||
+          user?.dob ||
+          user?.dateOfBirth ||
+          null;
+
+        const bloodGroup =
+          employee?.bloodGroup ||
+          user?.bloodGroup ||
+          'N/A';
+
+        const currentAddress =
+          employee?.currentAddress ||
+          user?.currentAddress ||
+          'N/A';
+
+        const permanentAddress =
+          employee?.permanentAddress ||
+          user?.permanentAddress ||
+          'N/A';
+
+        const mobile =
+          employee?.mobile ||
+          employee?.phone ||
+          employee?.phoneNumber ||
+          user?.mobile ||
+          user?.phone ||
+          user?.phoneNumber ||
+          'N/A';
+
+        // --------------------------------------
+        // SKILLS
+        // --------------------------------------
+        const skills =
+          Array.isArray(employee?.skills)
+            ? employee.skills
+            : Array.isArray(user?.skills)
+            ? user.skills
+            : [];
+
+        // --------------------------------------
+        // STATUS
+        // --------------------------------------
+        const status =
+          employee?.employeeStatus ||
+          employee?.status ||
+          user?.employeeStatus ||
+          user?.status ||
+          'Active';
+
+        // --------------------------------------
+        // JOINING DATE
+        // --------------------------------------
+        const joiningDate =
+          employee?.joiningDate ||
+          user?.joiningDate ||
+          null;
+
+        // --------------------------------------
+        // EMPLOYEE ID
+        // --------------------------------------
+        const finalEmployeeId =
+          employee?.employeeID ||
+          employee?.employeeId ||
+          user?.employeeID ||
+          user?.employeeId ||
+          `${roleType.toUpperCase()}${String(
+            index + 1
+          ).padStart(4, '0')}`;
+
+        // --------------------------------------
+        // RETURN MEMBER
+        // --------------------------------------
+        return {
+          id:
+            employee?._id ||
+            user?._id ||
+            user?.id ||
+            `${roleType}-${index}`,
+
+          userId:
+            user?._id ||
+            user?.id ||
+            employee?.userID ||
+            employee?.userId ||
+            '',
+
+          employeeId: finalEmployeeId,
+
+          name: fullName,
+
+          firstName:
+            employee?.firstName ||
+            user?.firstName ||
+            '',
+
+          lastName:
+            employee?.lastName ||
+            user?.lastName ||
+            '',
+
+          email:
+            employee?.email ||
+            user?.email ||
+            'No email',
+
+          mobile,
+
+          phone:
+            employee?.phone ||
+            employee?.phoneNumber ||
+            user?.phone ||
+            user?.phoneNumber ||
+            'N/A',
+
+          gender,
+
+          dob: formatDate(dob),
+
+          bloodGroup,
+
+          currentAddress,
+
+          permanentAddress,
+
+          designation,
+
+          department,
+
+          status,
+
+          currentAction:
+            employee?.currentAction ||
+            user?.currentAction ||
+            'Available',
+
+          skills,
+
+          joiningDate:
+            formatDate(joiningDate),
+
+          role: role,
+
+          roleType,
+
+          initials: getInitials(fullName),
+
+          avatarColor:
+            getAvatarColor(index)
+        };
+      });
+
+    console.log(
+      'FINAL MEMBERS:',
+      allMembers
+    );
+
+    if (isMounted) {
+      setMembers(allMembers);
+      setFilteredMembers(allMembers);
+    }
+
+  } catch (err) {
+
+    console.error(
+      '❌ Error fetching members:',
+      err
+    );
+
+    if (isMounted) {
+      setError(
+        err.message ||
+        'Unable to load team members.'
+      );
+
+      setMembers([]);
+      setFilteredMembers([]);
+    }
+
+  } finally {
+
+    if (isMounted) {
+      setLoading(false);
+    }
+  }
+};
 
     fetchAllMembers();
 

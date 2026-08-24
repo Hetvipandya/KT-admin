@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Mail, Phone, MessageCircle, X, Send, Users, Activity,
   Sparkles, Clock, ChevronRight, User,
@@ -40,6 +41,7 @@ function ContactCard({ contact, onOpen, index }) {
   return (
     <article
       tabIndex={0}
+      onClick={() => onOpen(contact)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onKeyDown={(e) => (e.key === "Enter" ? onOpen(contact) : null)}
@@ -105,6 +107,7 @@ function ContactCard({ contact, onOpen, index }) {
           {contact.email && (
             <a
               href={`mailto:${contact.email}`}
+              onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-300 group/link"
               aria-label={`Email ${contact.firstName} ${contact.lastName}`}
             >
@@ -119,6 +122,7 @@ function ContactCard({ contact, onOpen, index }) {
           {contact.phone && (
             <a
               href={`tel:${contact.phone}`}
+              onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-300 group/link"
               aria-label={`Call ${contact.firstName} ${contact.lastName}`}
             >
@@ -133,7 +137,10 @@ function ContactCard({ contact, onOpen, index }) {
           {/* Message preview */}
           {contact.message && (
             <button
-              onClick={() => onOpen(contact)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen(contact);
+              }}
               className="w-full text-left group/msg mt-1 sm:mt-2"
             >
               <div className="relative p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-indigo-50/50 to-purple-50/50 border border-indigo-100/50 hover:border-indigo-200 transition-all duration-300">
@@ -170,10 +177,10 @@ function ContactCard({ contact, onOpen, index }) {
             <span className="xs:hidden">Recent</span>
           </div>
           <div className="flex items-center gap-0.5 sm:gap-1">
-            <button className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100">
+            <button onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100">
               <Share2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-gray-400" />
             </button>
-            <button className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100">
+            <button onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100">
               <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-gray-400" />
             </button>
           </div>
@@ -202,10 +209,10 @@ function ContactModal({ contact, onClose }) {
       const button = node.querySelector("button, a, [tabindex]:not([tabindex='-1'])");
       button?.focus();
     }
-    // Prevent body scroll
-    document.body.style.overflow = 'hidden';
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = previousOverflow;
     };
   }, []);
 
@@ -215,20 +222,47 @@ function ContactModal({ contact, onClose }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
+      <button
+        type="button"
+        className="absolute inset-0 h-full w-full cursor-default bg-slate-950/60 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close contact details"
+      />
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Contact details for ${contact.firstName} ${contact.lastName}`}
-        className="relative w-full max-w-2xl overflow-hidden bg-white rounded-2xl sm:rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 duration-300 max-h-[95vh] sm:max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+        className="relative z-10 w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl animate-fade-in max-h-[calc(100vh-1.5rem)] sm:max-h-[90vh] flex flex-col"
       >
         {/* Modal gradient header */}
-        <div className="relative h-20 sm:h-24 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 flex-shrink-0">
+        <div className="relative h-32 sm:h-36 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 flex-shrink-0">
           <div className="absolute inset-0 bg-black/10" />
+          <div className="absolute inset-x-5 bottom-4 flex items-center gap-4 sm:inset-x-8 sm:bottom-5 sm:gap-5">
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-indigo-500 to-purple-600 text-xl font-bold text-white shadow-xl sm:h-20 sm:w-20 sm:text-2xl">
+              {contact.firstName?.charAt(0)}{contact.lastName?.charAt(0)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-xl font-bold leading-tight text-white sm:text-2xl">
+                {contact.firstName} {contact.lastName}
+              </h2>
+              <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-sm sm:px-3 sm:text-xs">
+                  <Sparkles className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{contact.service || "General Inquiry"}</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/90">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Active
+                </span>
+              </div>
+            </div>
+          </div>
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-3 right-3 sm:top-4 sm:right-4 p-2 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-all text-white"
             aria-label="Close dialog"
@@ -237,28 +271,7 @@ function ContactModal({ contact, onClose }) {
           </button>
         </div>
 
-        <div className="relative -mt-10 sm:-mt-12 px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8 overflow-y-auto flex-1">
-          {/* Avatar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 mb-4 sm:mb-6">
-            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl sm:text-2xl shadow-xl shadow-indigo-200/50 flex-shrink-0">
-              {contact.firstName?.charAt(0)}{contact.lastName?.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-                {contact.firstName} {contact.lastName}
-              </h2>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-                  <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                  <span className="truncate max-w-[100px] sm:max-w-none">{contact.service || "General Inquiry"}</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs text-emerald-600">
-                  <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  Active
-                </span>
-              </div>
-            </div>
-          </div>
+        <div className="px-5 pb-5 pt-6 sm:px-8 sm:pb-7 md:px-10 md:pb-8 overflow-y-auto flex-1">
 
           {/* Contact details */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
@@ -270,10 +283,11 @@ function ContactModal({ contact, onClose }) {
                 <button
                   onClick={() => handleCopy(contact.email)}
                   className="p-1 rounded-lg hover:bg-white transition-colors shrink-0"
+                  aria-label="Copy email address"
                 >
                   {copied ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500" /> : <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400" />}
                 </button>
-                <a href={`mailto:${contact.email}`} className="p-1 rounded-lg hover:bg-white transition-colors shrink-0">
+                <a href={`mailto:${contact.email}`} className="p-1 rounded-lg hover:bg-white transition-colors shrink-0" aria-label="Send email">
                   <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-500" />
                 </a>
               </div>
@@ -284,7 +298,7 @@ function ContactModal({ contact, onClose }) {
               <div className="flex items-center gap-1.5 sm:gap-2 mt-1.5 p-2.5 sm:p-3 rounded-xl bg-gray-50 border border-gray-100 group-hover:border-indigo-200 transition-colors">
                 <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400 shrink-0" />
                 <span className="text-xs sm:text-sm text-gray-700 flex-1 truncate">{contact.phone}</span>
-                <a href={`tel:${contact.phone}`} className="p-1 rounded-lg hover:bg-white transition-colors shrink-0">
+                <a href={`tel:${contact.phone}`} className="p-1 rounded-lg hover:bg-white transition-colors shrink-0" aria-label="Call phone number">
                   <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500" />
                 </a>
               </div>
@@ -324,7 +338,8 @@ function ContactModal({ contact, onClose }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -384,19 +399,7 @@ export default function Contacts() {
         {/* Premium Header */}
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 sm:gap-6">
-            <div>
-              <div className="flex items-center gap-2 sm:gap-3 mb-1">
-                <div className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200/50 flex-shrink-0">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6" />
-                </div>
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                  Contact Messages
-                </h1>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-500 ml-10 sm:ml-14">
-                View and manage all client inquiries
-              </p>
-            </div>
+          
 
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               {/* Stats card */}
@@ -541,7 +544,7 @@ export default function Contacts() {
           )}
         </div>
       </div>
-
+ 
       {/* Modal */}
       {selectedContact && (
         <ContactModal contact={selectedContact} onClose={() => setSelectedContact(null)} />

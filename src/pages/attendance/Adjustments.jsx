@@ -1135,15 +1135,15 @@ export default function Adjustments() {
   // ==========================================
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="w-full max-w-7xl mx-auto p-3 sm:p-4">
 
       {/* =====================================
           Header
       ===================================== */}
 
-      <div className="border-b border-gray-300 pb-4 mb-6">
+      <div className="border-b border-gray-300 pb-3 sm:pb-4 mb-4 sm:mb-6">
 
-        <h1 className="text-2xl font-bold text-gray-800">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
           Adjustments
         </h1>
 
@@ -1153,15 +1153,15 @@ export default function Adjustments() {
 
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
 
         {/* ===================================
             LEFT - FORM
         =================================== */}
 
-        <div className="lg:col-span-2 bg-gray-50 border border-gray-300 p-5">
+        <div className="lg:col-span-2 bg-gray-50 border border-gray-300 p-3 sm:p-5">
 
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-end mb-3 sm:mb-4">
 
             
 
@@ -1303,7 +1303,7 @@ export default function Adjustments() {
 
             <div className="space-y-4">
 
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:items-center">
 
                 <div>
 
@@ -1319,12 +1319,12 @@ export default function Adjustments() {
 
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex w-full gap-2 sm:w-auto">
 
                   <button
                     type="button"
                     onClick={addSession}
-                    className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 transition-colors"
+                    className="flex-1 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 sm:py-1 transition-colors sm:flex-none"
                     disabled={
                       sessionCount >=
                       2
@@ -1338,7 +1338,7 @@ export default function Adjustments() {
                     onClick={
                       removeSession
                     }
-                    className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1 transition-colors"
+                    className="flex-1 text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-2 sm:py-1 transition-colors sm:flex-none"
                     disabled={
                       sessionCount <=
                       1
@@ -1370,10 +1370,10 @@ export default function Adjustments() {
                   return (
                     <div
                       key={index}
-                      className="bg-white border border-gray-200 p-4"
+                      className="bg-white border border-gray-200 p-3 sm:p-4"
                     >
 
-                      <div className="flex justify-between items-center mb-3">
+                      <div className="flex justify-between items-center gap-2 mb-3">
 
                         <span className="text-sm font-medium text-gray-700">
                           Session{" "}
@@ -1544,7 +1544,7 @@ export default function Adjustments() {
                               session.breakEnd
                             }
                             onChange={(e) =>
-                              handleSessionChange(
+                              handleSessionChange( 
                                 index,
                                 "breakEnd",
                                 e.target.value
@@ -1669,12 +1669,12 @@ export default function Adjustments() {
                 Submit
             ================================= */}
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-stretch sm:justify-end pt-2">
 
           <button
   type="submit"
   disabled={submitting || loading}
-  className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-medium text-sm px-6 py-2.5 transition-colors"
+  className="w-full sm:w-auto bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-medium text-sm px-6 py-2.5 transition-colors"
 >
   {submitting
     ? "Submitting..."
@@ -1693,13 +1693,13 @@ export default function Adjustments() {
             RIGHT - HISTORY
         =================================== */}
 
-        <div className="border border-gray-300 p-5 flex flex-col">
+        <div className="border border-gray-300 p-3 sm:p-5 flex flex-col">
 
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
             Recent Adjustments
           </h2>
 
-          <div className="space-y-3 flex-1 overflow-y-auto max-h-[500px] pr-1">
+          <div className="space-y-3 flex-1 overflow-y-visible lg:overflow-y-auto max-h-none lg:max-h-[500px] pr-0 sm:pr-1">
 
             {fetchingLogs ? (
 
@@ -1726,7 +1726,7 @@ export default function Adjustments() {
 
                     {/* Name + Status */}
 
-                    <div className="flex justify-between items-start">
+                    <div className="flex flex-wrap justify-between items-start gap-2">
 
                       <span className="font-semibold text-gray-800 text-sm">
 

@@ -583,7 +583,7 @@ async function fetchHolidays() {
           };
       }
     };
-
+ 
     return (
       <div className="space-y-4">
         {/* Minimal Compact Header */}
@@ -601,12 +601,14 @@ async function fetchHolidays() {
               <button
                 type="button"
                 onClick={() => setShowBellDropdown(!showBellDropdown)}
-                className="relative p-1.5 rounded-lg border border-transparent bg-transparent text-slate-600 hover:bg-slate-100 transition-colors"
+                aria-label={`Notifications${announcements.length > 0 ? `, ${announcements.length} unread` : ""}`}
+                aria-expanded={showBellDropdown}
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-xs hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
               >
-                <Bell className="h-4 w-4" />
+                <Bell className="h-4 w-4" aria-hidden="true" />
                 {announcements.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
-                    {announcements.length}
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">
+                    {announcements.length > 99 ? "99+" : announcements.length}
                   </span>
                 )}
               </button>
@@ -614,7 +616,11 @@ async function fetchHolidays() {
               {showBellDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowBellDropdown(false)} />
-                  <div className="absolute right-0 mt-1.5 w-72 bg-white border border-slate-200/90 rounded-xl shadow-lg z-50 overflow-hidden text-xs">
+                  <div
+                    role="dialog"
+                    aria-label="Notifications"
+                    className="fixed left-1/2 top-1/2 z-50 mt-0 w-[calc(100vw-1.5rem)] max-w-[22rem] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-200/90 bg-white text-xs shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[22rem] sm:translate-x-0 sm:translate-y-0"
+                  >
                     <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/50">
                       <h3 className="font-semibold text-slate-900">Announcements</h3>
                       <button
@@ -874,10 +880,16 @@ async function fetchHolidays() {
           </div>
         </div>
 
-        {/* Announcement Modal */}
+        {/* Announcement Modal */} 
         {showAnnouncementModal && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white w-full max-w-md rounded-xl shadow-xl border border-slate-200/90 overflow-hidden">
+            <div
+              className="w-full rounded-xl border border-slate-200/90 bg-white shadow-xl overflow-hidden"
+              style={{
+                width: "100%",
+                maxWidth: "28rem",
+              }}
+            >
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-xs font-semibold text-slate-900">
                   {editingAnnouncementId ? "Edit Announcement" : "Post Announcement"}

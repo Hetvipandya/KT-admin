@@ -4,7 +4,7 @@ import axios from "axios";
 const BASE_URL = "https://kt-backend-1.onrender.com/api";
 
 // Modal Component for Assignments
-const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave }) => {
+const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, departmentName }) => {
   const [selectedInterns, setSelectedInterns] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -75,27 +75,6 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave }) 
     if (!person) return "Unnamed";
     return person.name || person.fullName || person.firstName || person.email || "Unnamed";
   };
-
-  // Get department name from lead
-  const getDepartmentName = (lead) => {
-    if (!lead) return "Unknown Department";
-    
-    // Check from teamLead.department
-    if (lead.teamLead?.department?.name) return lead.teamLead.department.name;
-    if (lead.teamLead?.department?.departmentName) return lead.teamLead.department.departmentName;
-    
-    // Check from lead.department
-    if (lead.department?.name) return lead.department.name;
-    if (lead.department?.departmentName) return lead.department.departmentName;
-    
-    // Check if department is a string
-    if (typeof lead.department === "string") return lead.department;
-    if (typeof lead.teamLead?.department === "string") return lead.teamLead.department;
-    
-    return "Unknown Department";
-  };
-
-  const departmentName = getDepartmentName(lead);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -427,68 +406,54 @@ export const TeamLead = () => {
   };
 
   // Get department name from lead data
-const getDepartment = (lead) => {
+const getDepartment = (lead, employees = []) => {
   if (!lead) return "-";
-  
-  // Check from teamLead.department (populated from backend)
-  if (lead.teamLead?.department) {
-    if (typeof lead.teamLead.department === 'object') {
-      return lead.teamLead.department.name || 
-             lead.teamLead.department.departmentName || 
-             "-";
+
+  const departmentValues = [
+    lead.teamLead?.department,
+    lead.department,
+    lead.departmentName,
+    lead.teamLead?.user?.department,
+    lead.user?.department,
+  ];
+
+  for (const value of departmentValues) {
+    if (value && typeof value === 'object') {
+      const name = value.departmentName || value.name;
+      if (name) return name;
     }
-    if (typeof lead.teamLead.department === 'string') {
-      if (!lead.teamLead.department.match(/^[0-9a-fA-F]{24}$/)) {
-        return lead.teamLead.department;
-      }
-    }
-  }
-  
-  // Check from lead.department
-  if (lead.department) {
-    if (typeof lead.department === 'object') {
-      return lead.department.name || 
-             lead.department.departmentName || 
-             "-";
-    }
-    if (typeof lead.department === 'string') {
-      if (!lead.department.match(/^[0-9a-fA-F]{24}$/)) {
-        return lead.department;
-      }
+    if (typeof value === 'string' && !value.match(/^[0-9a-fA-F]{24}$/)) {
+      return value;
     }
   }
-  
-  // Check departmentName
-  if (lead.departmentName) {
-    return lead.departmentName;
+
+  const leadIds = [
+    lead.teamLead?.userId,
+    lead.teamLead?.employeeId,
+    lead.teamLead?._id,
+    lead.userId,
+    lead.employeeId,
+    lead.user?._id,
+    lead._id,
+  ].filter(Boolean).map(String);
+
+  const matchingEmployee = employees.find((employee) => {
+    const employeeIds = [
+      employee?._id,
+      employee?.id,
+      employee?.userId,
+      employee?.userID,
+      employee?.employeeId,
+    ].filter(Boolean).map(String);
+    return employeeIds.some((id) => leadIds.includes(id));
+  });
+
+  const employeeDepartment = matchingEmployee?.department || matchingEmployee?.departmentName;
+  if (employeeDepartment && typeof employeeDepartment === 'object') {
+    return employeeDepartment.departmentName || employeeDepartment.name || "-";
   }
-  
-  // Check if department is in teamLead.user
-  if (lead.teamLead?.user?.department) {
-    if (typeof lead.teamLead.user.department === 'object') {
-      return lead.teamLead.user.department.name || 
-             lead.teamLead.user.department.departmentName || 
-             "-";
-    }
-    if (typeof lead.teamLead.user.department === 'string') {
-      if (!lead.teamLead.user.department.match(/^[0-9a-fA-F]{24}$/)) {
-        return lead.teamLead.user.department;
-      }
-    }
-  }
-  
-  // Check if department is in user object
-  if (lead.user?.department) {
-    if (typeof lead.user.department === 'object') {
-      return lead.user.department.name || 
-             lead.user.department.departmentName || 
-             "-";
-    }
-    if (typeof lead.user.department === 'string') {
-      if (!lead.user.department.match(/^[0-9a-fA-F]{24}$/)) {
-        return lead.user.department;
-      }
-    }
+  if (typeof employeeDepartment === 'string' && !employeeDepartment.match(/^[0-9a-fA-F]{24}$/)) {
+    return employeeDepartment;
   }
   
   return "-";
@@ -699,7 +664,7 @@ const getDesignation = (lead) => {
       const teamLeadResponse = await axios.get(
         `${BASE_URL}/teamLead/team`,
         { headers }
-      );
+      ); 
 
       let teamLeadsData = [];
       if (teamLeadResponse?.data?.data) {
@@ -1054,7 +1019,7 @@ const getDesignation = (lead) => {
               const totalAssignments = selectedInterns.length + selectedEmployees.length;
               const leadName = getUserName(lead);
               const leadEmail = getUserEmail(lead);
-              const departmentName = getDepartment(lead);
+              const departmentName = getDepartment(lead, employees);
 
               return (
                 <div
@@ -1181,6 +1146,7 @@ const getDesignation = (lead) => {
         lead={selectedLead}
         interns={interns}
         employees={employees}
+        departmentName={selectedLead ? getDepartment(selectedLead, employees) : "Unknown Department"}
         onSave={handleSaveAssignments}
       />
     </div>
