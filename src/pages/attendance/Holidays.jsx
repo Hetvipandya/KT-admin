@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
+import { useConfirm } from '../../components/common/ConfirmDialog';
 
 const API_BASE = 'https://kt-backend-1.onrender.com/api/holiday';
 
@@ -15,6 +16,7 @@ const normalizeHoliday = (holiday) => {
 };
 
 export default function Holidays() {
+  const { confirm, confirmationDialog } = useConfirm();
   const [holidays, setHolidays] = useState([]);
   const [date, setDate] = useState('');
   const [title, setTitle] = useState('');
@@ -63,12 +65,12 @@ export default function Holidays() {
 
   const openAddHolidayModal = (selectedDate = '') => {
     resetForm(false);
-    if (selectedDate) setDate(selectedDate);
+    if (selectedDate) setDate(selectedDate); 
     setShowModal(true);
     setTimeout(() => titleInputRef.current?.focus(), 50);
   };
-
-  const handleSubmit = async (e) => {
+ 
+  const handleSubmit = async (e) => { 
     e.preventDefault();
     const trimmedTitle = title.trim();
     if (!date || !trimmedTitle) return alert('Please fill in both date and title!');
@@ -133,7 +135,12 @@ export default function Holidays() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this holiday?')) return;
+    const confirmed = await confirm({
+      title: 'Delete holiday?',
+      message: 'Are you sure you want to delete this holiday?',
+      confirmLabel: 'Delete',
+    });
+    if (!confirmed) return;
 
     setError('');
 
@@ -557,6 +564,7 @@ export default function Holidays() {
 
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
+      {confirmationDialog}
       <div className="mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -603,11 +611,8 @@ export default function Holidays() {
       <div>
         <div className="w-full">
           {loading ? (
-            <div className="bg-white border border-slate-300 rounded-lg sm:rounded-xl p-8 text-center">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 border-4 border-blue-200 border-t-blue-600 animate-spin rounded-full"></div>
-                <p className="text-slate-500 font-medium text-xs sm:text-sm">Loading holidays...</p>
-              </div>
+            <div className="flex justify-center items-center py-16 sm:py-20">
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
             </div>
           ) : view === 'calendar' ? (
             renderCalendar()

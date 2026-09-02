@@ -6,12 +6,14 @@ import {
   AlertCircle, BarChart3, TrendingUp, Star, BookOpen, Code, 
   LayoutGrid, List as ListIcon, Download, Printer
 } from "lucide-react";
+import { useConfirm } from "../components/common/ConfirmDialog";
 
 export default function Positions() {
+  const { confirm, confirmationDialog } = useConfirm();
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all");
+  const [filterType, setFilterType] = useState("all"); 
   const [viewMode, setViewMode] = useState("grid");
   const [selectedPosition, setSelectedPosition] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -128,7 +130,12 @@ export default function Positions() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this position?")) {
+    const confirmed = await confirm({
+      title: "Delete position?",
+      message: "Are you sure you want to delete this position?",
+      confirmLabel: "Delete",
+    });
+    if (confirmed) {
       try {
         const response = await fetch(`https://kt-backend-1.onrender.com/api/position/${id}`, {
           method: "DELETE",
@@ -193,6 +200,7 @@ export default function Positions() {
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6 lg:px-8">
+      {confirmationDialog}
       <div className="mx-auto max-w-7xl">
         {/* Header Section */}
         <div className="mb-8">
@@ -334,35 +342,8 @@ export default function Positions() {
         {/* Main Content */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           {loading ? (
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[1, 2, 3, 4, 5, 6].map((skeleton) => (
-                  <div key={skeleton} className="animate-pulse">
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-6 space-y-4">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-3 flex-1">
-                          <div className="h-6 w-3/4 rounded bg-gray-200" />
-                          <div className="h-4 w-1/2 rounded bg-gray-200" />
-                        </div>
-                        <div className="flex gap-2">
-                          <div className="h-9 w-9 rounded bg-gray-200" />
-                          <div className="h-9 w-9 rounded bg-gray-200" />
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <div className="h-7 w-20 rounded-full bg-gray-200" />
-                        <div className="h-7 w-24 rounded-full bg-gray-200" />
-                        <div className="h-7 w-20 rounded-full bg-gray-200" />
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        <div className="h-6 w-16 rounded bg-gray-200" />
-                        <div className="h-6 w-20 rounded bg-gray-200" />
-                        <div className="h-6 w-14 rounded bg-gray-200" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="flex justify-center items-center py-16 sm:py-20">
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
             </div>
           ) : filteredPositions.length === 0 ? (
             <div className="text-center py-20">

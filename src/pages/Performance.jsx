@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useConfirm } from "../components/common/ConfirmDialog";
 
 const Performance = () => {
+  const { confirm, confirmationDialog } = useConfirm();
   const headers = {
     Authorization: `Bearer ${localStorage.getItem("token")}`,
   };
@@ -22,6 +24,11 @@ const Performance = () => {
   });
 
   useEffect(() => {
+    fetchEmployees();
+    fetchAllPerformances();
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (
         employeeMenuRef.current &&
@@ -32,14 +39,7 @@ const Performance = () => {
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    fetchEmployees();
-    fetchAllPerformances();
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -423,16 +423,11 @@ const Performance = () => {
     });
   };
 
-  // ============================================================
-  // SELECT EMPLOYEE
-  // ============================================================
-
   const handleEmployeeSelect = (employeeId) => {
-    setForm({
-      ...form,
+    setForm((currentForm) => ({
+      ...currentForm,
       employeeID: employeeId,
-    });
-
+    }));
     setIsEmployeeMenuOpen(false);
   };
 
@@ -655,11 +650,12 @@ const Performance = () => {
     const employeeName =
       getEmployeeDisplayName(perf);
 
-    if (
-      !window.confirm(
-        `Are you sure you want to delete performance record for ${employeeName}?`
-      )
-    ) {
+    const confirmed = await confirm({
+      title: "Delete performance record?",
+      message: `Are you sure you want to delete performance record for ${employeeName}?`,
+      confirmLabel: "Delete",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -729,7 +725,7 @@ const Performance = () => {
 
     return (
       <div
-        className={`fixed top-4 right-4 z-50 px-4 sm:px-6 py-3 sm:py-4 rounded-lg border shadow-lg max-w-[90%] sm:max-w-md ${
+        className={`fixed top-4 right-4 z-50 px-4 sm:px-6 py-3 sm:py-4 rounded-lg border max-w-[90%] sm:max-w-md ${
           bgColor[notification.type] ||
           bgColor.info
         }`}
@@ -785,7 +781,7 @@ const Performance = () => {
           {performances.map((perf) => (
             <div
               key={perf._id}
-              className="rounded-lg p-4 shadow-sm border border-gray-200"
+              className="rounded-lg p-4 border border-gray-200"
             >
               <div className="flex justify-between items-start mb-2">
 
@@ -1026,12 +1022,13 @@ const Performance = () => {
 
   return (
     <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4 lg:px-8">
+      {confirmationDialog}
 
       <Notification />
 
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
 
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl overflow-hidden">
+        <div className="bg-white rounded-xl sm:rounded-2xl overflow-hidden">
 
           {loading ? (
             <div className="flex justify-center items-center py-16 sm:py-20">
@@ -1042,6 +1039,10 @@ const Performance = () => {
           ) : (
             <div className="p-4 sm:p-6 md:p-8">
 
+              <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6 lg:gap-8 items-start">
+
+              <div className="border border-gray-200 rounded-lg p-4 sm:p-5">
+
               {/* ==================================================
                   EDIT MODE
               ================================================== */}
@@ -1049,7 +1050,7 @@ const Performance = () => {
               {editingId ? (
                 <div className="mb-6">
 
-                  <div className="border border-blue-200 rounded-xl p-3 sm:p-4 mb-4">
+                  <div className="border border-blue-200 rounded-lg p-3 sm:p-4 mb-4">
 
                     <p className="text-blue-800 font-medium text-sm sm:text-base">
                       ✏️ Editing Performance
@@ -1092,7 +1093,7 @@ const Performance = () => {
                         handleUpdatePerformance
                       }
                       disabled={submitting}
-                      className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-2.5 sm:py-3 px-4 rounded-xl transition duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 text-sm sm:text-base"
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 text-sm sm:text-base"
                     >
                       {submitting
                         ? "Updating..."
@@ -1121,126 +1122,69 @@ const Performance = () => {
                       Select Employee *
                     </label>
 
-                    <div
-                      ref={employeeMenuRef}
-                      className="relative w-full min-w-0"
-                    >
-
+                    <div ref={employeeMenuRef} className="relative w-full max-w-[230px]">
                       <button
                         type="button"
-                        onClick={() =>
-                          setIsEmployeeMenuOpen(
-                            (prev) => !prev
-                          )
-                        }
-                        className="w-full min-w-0 max-w-full border-2 border-gray-200 rounded-xl p-3 pr-10 text-left focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-200 bg-white text-sm sm:text-base flex items-center justify-between"
+                        onClick={() => setIsEmployeeMenuOpen((isOpen) => !isOpen)}
+                        className="flex h-10 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-2.5 text-left text-xs sm:text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-200"
+                        aria-haspopup="listbox"
+                        aria-expanded={isEmployeeMenuOpen}
                       >
-
-                        <span
-                          className={
-                            form.employeeID
-                              ? "text-gray-900"
-                              : "text-gray-500"
-                          }
-                        >
-                          {employees.find(
-                            (emp) =>
-                              emp._id ===
-                              form.employeeID
-                          )?.name ||
+                        <span className={form.employeeID ? "text-gray-900" : "text-gray-500"}>
+                          {employees.find((employee) => employee._id === form.employeeID)?.name ||
                             "-- Select an Employee --"}
                         </span>
-
                         <svg
-                          className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${
-                            isEmployeeMenuOpen
-                              ? "rotate-180"
-                              : "rotate-0"
+                          className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${
+                            isEmployeeMenuOpen ? "rotate-180" : ""
                           }`}
                           viewBox="0 0 20 20"
                           fill="currentColor"
                           aria-hidden="true"
                         >
-
                           <path
                             fillRule="evenodd"
                             d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
                             clipRule="evenodd"
                           />
-
                         </svg>
-
                       </button>
 
                       {isEmployeeMenuOpen && (
-                        <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+                        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                          {["intern", "employee", "teamlead"].map((type) => {
+                            const matchingEmployees = employees.filter(
+                              (employee) => employee.type === type
+                            );
 
-                          {[
-                            {
-                              key: "intern",
-                              label: "👨‍🎓 Interns",
-                            },
-                            {
-                              key: "employee",
-                              label: "👔 Employees",
-                            },
-                            {
-                              key: "teamlead",
-                              label: "👨‍💼 Team Leads",
-                            },
-                          ].map((role) => {
-
-                            const filteredEmployees =
-                              employees.filter(
-                                (emp) =>
-                                  emp.type ===
-                                  role.key
-                              );
-
-                            if (
-                              filteredEmployees.length ===
-                              0
-                            ) {
-                              return null;
-                            }
+                            if (matchingEmployees.length === 0) return null;
 
                             return (
-                              <div key={role.key}>
-
-                                <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                                  {role.label}
+                              <div key={type}>
+                                <div className="border-b border-gray-100 bg-gray-50 px-2.5 py-1.5 text-[11px] font-semibold uppercase text-gray-500">
+                                  {type === "teamlead" ? "Team Leads" : `${type}s`}
                                 </div>
-
-                                {filteredEmployees.map(
-                                  (emp) => (
-                                    <button
-                                      key={emp._id}
-                                      type="button"
-                                      onClick={() =>
-                                        handleEmployeeSelect(
-                                          emp._id
-                                        )
-                                      }
-                                      className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
-                                        form.employeeID ===
-                                        emp._id
-                                          ? "bg-indigo-50 text-indigo-700 font-medium"
-                                          : "text-gray-700 hover:bg-gray-100"
-                                      }`}
-                                    >
-                                      {emp.name ||
-                                        "Unknown Employee"}
-                                    </button>
-                                  )
-                                )}
-
+                                {matchingEmployees.map((employee) => (
+                                  <button
+                                    key={employee._id}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={form.employeeID === employee._id}
+                                    onClick={() => handleEmployeeSelect(employee._id)}
+                                    className={`block w-full px-2.5 py-2 text-left text-xs transition-colors ${
+                                      form.employeeID === employee._id
+                                        ? "bg-indigo-50 font-medium text-indigo-700"
+                                        : "text-gray-700 hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    {employee.name}
+                                  </button>
+                                ))}
                               </div>
                             );
                           })}
-
                         </div>
                       )}
-
                     </div>
 
                     {employees.length === 0 &&
@@ -1284,8 +1228,7 @@ const Performance = () => {
                       PERFORMANCE FORM
                   ================================================== */}
 
-                  {form.employeeID && (
-                    <div className="mb-6 space-y-6">
+                  <div className="mb-6 space-y-6">
 
                       {/* Percentage */}
 
@@ -1306,7 +1249,7 @@ const Performance = () => {
                             value={form.percentage}
                             onChange={handleChange}
                             placeholder="Enter percentage"
-                            className="w-full border-2 border-gray-200 rounded-xl p-3 pr-10 sm:p-4 sm:pr-11 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-200 text-sm sm:text-base"
+                            className="w-full border border-gray-300 rounded-lg p-3 pr-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 text-sm sm:text-base"
                           />
 
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">
@@ -1331,20 +1274,19 @@ const Performance = () => {
                           value={form.remarks}
                           onChange={handleChange}
                           placeholder="Add your remarks about the employee's performance..."
-                          className="w-full border-2 border-gray-200 rounded-xl p-3 sm:p-4 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-200 resize-none text-sm sm:text-base"
+                          className="w-full border border-gray-300 rounded-lg p-3 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 resize-none text-sm sm:text-base"
                         />
 
                       </div>
 
-                    </div>
-                  )}
+                  </div>
 
                   {/* ==================================================
                       ACTION BUTTONS
                   ================================================== */}
 
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-8">
-
+ 
                     <button
                       onClick={submitPerformance}
                       disabled={
@@ -1352,7 +1294,7 @@ const Performance = () => {
                         loading ||
                         !form.employeeID
                       }
-                      className="flex-1 bg-slate-300 hover:bg-slate-400 border border-slate-400 text-black font-semibold py-2.5 sm:py-3 px-4 rounded-xl transition duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                      className="flex-1 bg-slate-300 hover:bg-slate-400 border border-slate-400 text-black font-semibold py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
                     >
 
                       {submitting ? (
@@ -1386,7 +1328,7 @@ const Performance = () => {
 
                         </span>
                       ) : (
-                        "💾 Save Performance"
+                        "Save"
                       )}
 
                     </button>
@@ -1396,18 +1338,24 @@ const Performance = () => {
                       disabled={submitting}
                       className="px-4 sm:px-6 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-semibold py-2.5 sm:py-3 rounded-xl transition duration-200 disabled:opacity-50 text-sm sm:text-base"
                     >
-                      🔄 Reset
+                      Reset
                     </button>
 
                   </div>
                 </>
               )}
 
-              {/* ==================================================
+                </div>
+
+                <div className="min-w-0">
+                {/* ==================================================
                   PERFORMANCE LIST
-              ================================================== */}
+                ================================================== */}
 
               <PerformanceList />
+
+                </div>
+                </div>
 
             </div>
           )}

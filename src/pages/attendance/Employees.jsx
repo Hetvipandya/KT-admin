@@ -15,6 +15,7 @@ import {
   UserMinus,
   X,
 } from "lucide-react";
+import { useConfirm } from "../../components/common/ConfirmDialog";
 
 const initialFormData = {
   firstName: "",
@@ -29,6 +30,7 @@ const initialFormData = {
 };
 
 export default function Employees() {
+  const { confirm, confirmationDialog } = useConfirm();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -315,7 +317,7 @@ export default function Employees() {
       );
 
       const data = await res.json();
-
+ 
       if (data.success) {
         alert("Employee Updated Successfully");
 
@@ -337,9 +339,11 @@ export default function Employees() {
   // DELETE /employee/remove/:id
   // =========================
   const handleDeleteEmployee = async (employeeId, employeeName) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${employeeName}?\n\nThis action cannot be undone.`
-    );
+    const confirmed = await confirm({
+      title: "Delete employee?",
+      message: `Are you sure you want to delete ${employeeName}? This action cannot be undone.`,
+      confirmLabel: "Delete",
+    });
 
     if (!confirmed) {
       return;
@@ -421,6 +425,7 @@ export default function Employees() {
 
   return (
     <div className="min-h-screen bg-gray-50 px-3 sm:px-4 py-4 sm:py-6 lg:px-8">
+      {confirmationDialog}
       <div className="mx-auto max-w-7xl">
 
         {/* ================= HEADER ================= */}
@@ -542,30 +547,8 @@ export default function Employees() {
 
           {/* ================= LOADING ================= */}
           {loading ? (
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 p-3 sm:p-4 lg:p-6">
-              {[1, 2, 3, 4].map((skeleton) => (
-                <div
-                  key={skeleton}
-                  className="animate-pulse border border-gray-200 p-3 sm:p-4 lg:p-5 space-y-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2 flex-1">
-                      <div className="h-5 sm:h-6 w-1/3 bg-gray-200" />
-                      <div className="h-3 sm:h-4 w-1/2 bg-gray-200" />
-                    </div>
-
-                    <div className="flex gap-1.5 sm:gap-2">
-                      <div className="h-5 sm:h-6 w-16 sm:w-20 bg-gray-200" />
-                      <div className="h-5 sm:h-6 w-16 sm:w-20 bg-gray-200" />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    <div className="h-3 sm:h-4 w-24 sm:w-32 bg-gray-200" />
-                    <div className="h-3 sm:h-4 w-20 sm:w-28 bg-gray-200" />
-                  </div>
-                </div>
-              ))}
+            <div className="flex justify-center items-center py-16 sm:py-20">
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
             </div>
 
           ) : filteredEmployees.length === 0 ? (
@@ -746,6 +729,15 @@ export default function Employees() {
                                   </>
                                 )}
                               </button>
+
+                              <a
+                                href={`mailto:${emp.email}`}
+                                title={`Email ${emp.firstName || "employee"}`}
+                                aria-label={`Email ${emp.firstName || "employee"}`}
+                                className="inline-flex items-center justify-center p-2 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors"
+                              >
+                                <Mail className="h-3.5 w-3.5" />
+                              </a>
                             </div>
                           </td>
                         </tr>
@@ -876,6 +868,15 @@ export default function Employees() {
                             </>
                           )}
                         </button>
+
+                        <a
+                          href={`mailto:${emp.email}`}
+                          title={`Email ${emp.firstName || "employee"}`}
+                          aria-label={`Email ${emp.firstName || "employee"}`}
+                          className="inline-flex min-w-[42px] items-center justify-center px-2 py-2 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                        </a>
                       </div>
                     </div>
                   ))}
@@ -1004,6 +1005,15 @@ export default function Employees() {
                             </>
                           )}
                         </button>
+
+                        <a
+                          href={`mailto:${emp.email}`}
+                          title={`Email ${emp.firstName || "employee"}`}
+                          aria-label={`Email ${emp.firstName || "employee"}`}
+                          className="inline-flex min-w-[34px] items-center justify-center px-2 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200"
+                        >
+                          <Mail className="h-3 w-3" />
+                        </a>
                       </div>
                     </div>
                   </div>

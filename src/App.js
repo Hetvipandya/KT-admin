@@ -1,28 +1,30 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
-import Sidebar from "./components/Sidebar";
-import Dashboard from "./pages/Dashboard";
-import Applications from "./pages/Applications";
-import Contacts from "./pages/Contacts";
-import Positions from "./pages/Positions";
-import PortfolioLeads from "./pages/PortfolioLeads";
-import Employees from "./pages/attendance/Employees";
-import CheckInRequest from "./pages/attendance/CheckInRequest";
-import LeaveRequest from "./pages/attendance/LeaveRequest";
-import AttendanceLogs from "./pages/attendance/AttendanceLogs"; 
-import OfficeSettings from "./pages/attendance/OfficeSettings";
-import Adjustments from "./pages/attendance/Adjustments";
-import Team from "./pages/attendance/Team"; 
-import Members from "./pages/attendance/Members";
-import Holidays from "./pages/attendance/Holidays";
-import Profile from "./pages/Profile";
-import Setting from "./pages/Setting"; 
-import Logout from "./pages/Logout";
-import NotFound from "./pages/NotFound";
-import Login from "./pages/Login";
-import EmployeeRequests from "./pages/EmployeeRequests";
-import Performance from "./pages/Performance";
-import { TeamLead } from "./pages/TeamLead";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { PageSkeleton } from "./components/common/Loader";
+
+const Sidebar = lazy(() => import("./components/Sidebar"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Applications = lazy(() => import("./pages/Applications"));
+const Contacts = lazy(() => import("./pages/Contacts"));
+const Positions = lazy(() => import("./pages/Positions"));
+const PortfolioLeads = lazy(() => import("./pages/PortfolioLeads"));
+const Employees = lazy(() => import("./pages/attendance/Employees"));
+const CheckInRequest = lazy(() => import("./pages/attendance/CheckInRequest"));
+const LeaveRequest = lazy(() => import("./pages/attendance/LeaveRequest"));
+const AttendanceLogs = lazy(() => import("./pages/attendance/AttendanceLogs"));
+const OfficeSettings = lazy(() => import("./pages/attendance/OfficeSettings"));
+const Adjustments = lazy(() => import("./pages/attendance/Adjustments"));
+const Team = lazy(() => import("./pages/attendance/Team"));
+const Members = lazy(() => import("./pages/attendance/Members"));
+const Holidays = lazy(() => import("./pages/attendance/Holidays"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Setting = lazy(() => import("./pages/Setting"));
+const Logout = lazy(() => import("./pages/Logout"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Login = lazy(() => import("./pages/Login"));
+const EmployeeRequests = lazy(() => import("./pages/EmployeeRequests"));
+const Performance = lazy(() => import("./pages/Performance"));
+const TeamLead = lazy(() => import("./pages/TeamLead").then((module) => ({ default: module.TeamLead })));
 
 function PageHeader() {
   const location = useLocation();
@@ -78,26 +80,31 @@ function AppShell() {
 
   if (!isAuthenticated) {
     return (
-      <Routes>
-        <Route path="/" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
-        <Route path="/login" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <Suspense fallback={<PageSkeleton />}>
+        <Routes>
+          <Route path="/" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
+          <Route path="/login" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Sidebar />
+      <Suspense fallback={<PageSkeleton />}>
+        <Sidebar />
+      </Suspense>
 
       <div className="lg:pl-60 flex flex-col min-h-screen">
         <PageHeader />
 
         <main className="flex-1 p-3 pt-32 sm:p-5 sm:pt-32 lg:p-6 lg:pt-20">
           <div className="page-content w-full">
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+            <Suspense fallback={<PageSkeleton />}>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/applications" element={<Applications />} />
               <Route path="/contacts" element={<Contacts />} />
               <Route path="/positions" element={<Positions />} />
@@ -117,8 +124,9 @@ function AppShell() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/setting" element={<Setting />} />
               <Route path="/logout" element={<Logout setIsAuthenticated={setIsAuthenticated} />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </div>
         </main>
       </div>

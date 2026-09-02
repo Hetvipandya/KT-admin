@@ -266,7 +266,7 @@ function ContactModal({ contact, onClose }) {
             onClick={onClose}
             className="absolute top-3 right-3 sm:top-4 sm:right-4 p-2 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-all text-white"
             aria-label="Close dialog"
-          >
+          > 
             <X className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
         </div>
@@ -497,28 +497,8 @@ export default function Contacts() {
         {/* Main Content */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl border border-white/50 overflow-hidden p-3 sm:p-4 md:p-6">
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-              {[1, 2, 3, 4, 5, 6].map((skeleton) => (
-                <div key={skeleton} className="animate-pulse">
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300" />
-                        <div className="space-y-2">
-                          <div className="h-4 w-20 sm:w-24 bg-gray-200 rounded" />
-                          <div className="h-3 w-14 sm:w-16 bg-gray-100 rounded" />
-                        </div>
-                      </div>
-                      <div className="h-6 w-14 sm:w-16 bg-gray-200 rounded-xl" />
-                    </div>
-                    <div className="space-y-3">
-                      <div className="h-9 sm:h-10 bg-gray-100 rounded-xl" />
-                      <div className="h-9 sm:h-10 bg-gray-100 rounded-xl" />
-                      <div className="h-14 sm:h-16 bg-gray-100 rounded-xl" />
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="flex justify-center items-center py-16 sm:py-20">
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
             </div>
           ) : filteredContacts.length === 0 ? (
             <div className="text-center py-12 sm:py-16 md:py-20">

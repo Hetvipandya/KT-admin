@@ -264,11 +264,8 @@ const EmployeeRequests = () => {
 
         {/* Loading State */}
         {loading && (
-          <div className="flex h-48 sm:h-64 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm">
-            <div className="flex items-center gap-2 sm:gap-3 text-slate-600">
-              <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin text-blue-600" />
-              <span className="text-sm sm:text-base">Loading employee requests...</span>
-            </div>
+          <div className="flex justify-center items-center py-16 sm:py-20">
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
           </div>
         )}
 

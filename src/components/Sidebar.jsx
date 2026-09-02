@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { 
-  Menu, X, LayoutDashboard, FileText, Users, Briefcase, UserCheck, User, LogOut, ChevronRight, Settings, Calendar, Award
+  Menu, X, Plus, Bell, LayoutDashboard, FileText, Users, Briefcase, UserCheck, User, LogOut, ChevronRight, Settings, Calendar, Award
 } from "lucide-react";
 
 function Sidebar() {
@@ -66,12 +66,34 @@ function Sidebar() {
           <img src="/logo.png" alt="Logo" className="h-8 object-contain rounded" />
           <span className="font-semibold text-xs text-slate-800 tracking-tight">Kevalon Tech</span>
         </div>
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
-        >
-          {isOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            title="View notifications"
+            aria-label="View notifications"
+            onClick={() => window.dispatchEvent(new Event("open-notifications"))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-indigo-50 hover:text-indigo-600"
+          >
+            <Bell size={18} />
+          </button>
+          <button
+            type="button"
+            title="Post announcement"
+            aria-label="Post announcement"
+            onClick={() => window.dispatchEvent(new Event("open-announcement"))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-50"
+          >
+            <Plus size={20} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            aria-label={isOpen ? "Close navigation" : "Open navigation"}
+            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
+          >
+            {isOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Backdrop (Mobile only) */}

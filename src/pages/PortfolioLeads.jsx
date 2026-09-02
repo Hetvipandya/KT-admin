@@ -6,7 +6,7 @@ import {
   BarChart3, PieChart, Activity, Circle, MoreHorizontal, Download, RefreshCw,
   Check, Clock as ClockIcon, AlertTriangle
 } from "lucide-react"; 
-
+ 
 export default function PortfolioLeads() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -377,28 +377,8 @@ export default function PortfolioLeads() {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 sm:p-6">
-              {[1, 2, 3, 4].map((skeleton) => (
-                <div key={skeleton} className="animate-pulse bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-full bg-slate-200" />
-                      <div className="space-y-2">
-                        <div className="h-4 w-32 rounded bg-slate-200" />
-                        <div className="h-3 w-24 rounded bg-slate-200" />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="h-6 w-16 rounded-full bg-slate-200" />
-                      <div className="h-6 w-16 rounded-full bg-slate-200" />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="h-3 w-20 rounded bg-slate-200" />
-                    <div className="h-3 w-20 rounded bg-slate-200" />
-                  </div>
-                </div>
-              ))}
+            <div className="flex justify-center items-center py-16 sm:py-20">
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
             </div>
           ) : filteredLeads.length === 0 ? (
             <div className="text-center py-16 sm:py-20">

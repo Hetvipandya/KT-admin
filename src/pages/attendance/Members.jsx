@@ -518,11 +518,6 @@ const fetchAllMembers = async () => {
         // PERSONAL DETAILS
         // EMPLOYEE FIRST, USER FALLBACK
         // --------------------------------------
-        const gender =
-          employee?.gender ||
-          user?.gender ||
-          'N/A';
-
         const dob =
           employee?.dob ||
           employee?.dateOfBirth ||
@@ -536,13 +531,17 @@ const fetchAllMembers = async () => {
           'N/A';
 
         const currentAddress =
+          employee?.address ||
           employee?.currentAddress ||
+          user?.address ||
           user?.currentAddress ||
           'N/A';
 
         const permanentAddress =
           employee?.permanentAddress ||
+          employee?.permanent_address ||
           user?.permanentAddress ||
+          user?.permanent_address ||
           'N/A';
 
         const mobile =
@@ -639,8 +638,6 @@ const fetchAllMembers = async () => {
             user?.phoneNumber ||
             'N/A',
 
-          gender,
-
           dob: formatDate(dob),
 
           bloodGroup,
@@ -707,7 +704,7 @@ const fetchAllMembers = async () => {
 
     if (isMounted) {
       setLoading(false);
-    }
+    } 
   }
 };
 
@@ -1019,18 +1016,8 @@ const fetchAllMembers = async () => {
 
         {/* Content */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <div key={n} className="border border-slate-300 p-3 animate-pulse bg-white">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-200"></div>
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3.5 bg-slate-200 w-2/3"></div>
-                    <div className="h-2.5 bg-slate-200 w-1/2"></div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="flex justify-center items-center py-16 sm:py-20">
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
           </div>
         ) : error ? (
           <div className="border border-rose-300 bg-rose-50 px-3 py-2.5 text-rose-700 flex items-center gap-2 text-sm">
@@ -1043,7 +1030,7 @@ const fetchAllMembers = async () => {
             <h3 className="text-sm font-semibold text-slate-900">No members found</h3>
             <p className="text-xs text-slate-500">Try adjusting your filters</p>
           </div>
-        ) : (
+        ) : ( 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredMembers.map((member) => {
               const statusStyle = getStatusStyle(member.status);
@@ -1136,14 +1123,10 @@ const fetchAllMembers = async () => {
 
             <div className="p-4 overflow-y-auto space-y-4">
               
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="bg-indigo-50/40 p-2 text-center border border-indigo-300">
                   <div className="text-xs font-bold text-indigo-700 truncate">{selectedMember.employeeId}</div>
                   <div className="text-[9px] text-slate-400 font-medium mt-0.5">ID</div>
-                </div>
-                <div className="bg-emerald-50/40 p-2 text-center border border-emerald-300">
-                  <div className="text-xs font-bold text-emerald-700 capitalize truncate">{selectedMember.gender}</div>
-                  <div className="text-[9px] text-slate-400 font-medium mt-0.5">Gender</div>
                 </div>
                 <div className="bg-amber-50/40 p-2 text-center border border-amber-300">
                   <div className="text-xs font-bold text-amber-700 uppercase truncate">{selectedMember.bloodGroup}</div>

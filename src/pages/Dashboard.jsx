@@ -1,4 +1,5 @@
-  import React, { useEffect, useState } from "react";
+  import React, { useEffect, useRef, useState } from "react";
+  import { createPortal } from "react-dom";
   import {
     Users,
     UserCheck,
@@ -17,8 +18,10 @@
     Edit3,
     Trash2
   } from "lucide-react";
+  import { useConfirm } from "../components/common/ConfirmDialog";
 
   export default function Dashboard() {
+    const { confirm, confirmationDialog } = useConfirm();
     const [stats, setStats] = useState([
       {
         id: 1,
@@ -62,9 +65,14 @@
       internCount: 0,
       teamLeadCount: 0,
     });
+    const [loading, setLoading] = useState(true);
     const [announcements, setAnnouncements] = useState([]);
     const [showAllAnnouncementsModal, setShowAllAnnouncementsModal] = useState(false);
     const [showBellDropdown, setShowBellDropdown] = useState(false);
+    const notificationButtonRef = useRef(null);
+    const [notificationPosition, setNotificationPosition] = useState(null);
+    const absentCardRef = useRef(null);
+    const [absentPosition, setAbsentPosition] = useState(null);
     // Announcement form state
     const [announcementForm, setAnnouncementForm] = useState({
       title: "",
@@ -79,12 +87,45 @@
     };
 
     useEffect(() => {
-      fetchUsers();
-      fetchTeamLeads();
-      fetchLeaves();
-      fetchHolidays();
-      fetchAbsentAttendance();
-      fetchAnnouncements();
+      const loadDashboard = async () => {
+        setLoading(true);
+        await Promise.all([
+          fetchUsers(),
+          fetchTeamLeads(),
+          fetchLeaves(),
+          fetchHolidays(),
+          fetchAbsentAttendance(),
+          fetchAnnouncements(),
+        ]);
+        setLoading(false);
+      };
+
+      loadDashboard();
+    }, []);
+
+    useEffect(() => {
+      const openAnnouncement = () => {
+        setAnnouncementForm({ title: "", message: "", type: "ANNOUNCEMENT" });
+        setEditingAnnouncementId(null);
+        setShowAnnouncementModal(true);
+      };
+
+      window.addEventListener("open-announcement", openAnnouncement);
+      return () => window.removeEventListener("open-announcement", openAnnouncement);
+    }, []);
+
+    useEffect(() => {
+      const openNotifications = () => {
+        setNotificationPosition({
+          top: 64,
+          left: 12,
+          width: Math.min(320, window.innerWidth - 24),
+        });
+        setShowBellDropdown(true);
+      };
+
+      window.addEventListener("open-notifications", openNotifications);
+      return () => window.removeEventListener("open-notifications", openNotifications);
     }, []);
 
     useEffect(() => {
@@ -317,6 +358,32 @@ async function fetchHolidays() {
 
       return [];
     };
+
+    const getAttendanceStatus = (record) => {
+      const rawStatus =
+        record?.status ||
+        record?.attendanceStatus ||
+        record?.currentStatus ||
+        record?.state ||
+        record?.attendance?.status ||
+        "";
+      const status = String(rawStatus).trim().toLowerCase();
+
+      if (["present", "on time", "approved"].includes(status)) return "present";
+      if (record?.checkInTime || record?.checkinTime || record?.punchIn || record?.approvedCheckInTime) {
+        return "present";
+      }
+      return status;
+    };
+
+    const getAttendanceDate = (record) =>
+      record?.date ||
+      record?.attendanceDate ||
+      record?.attendance?.date ||
+      record?.createdAt ||
+      record?.checkInTime ||
+      record?.checkinTime ||
+      record?.updatedAt;
  
     async function fetchAbsentAttendance() {
       try {
@@ -355,11 +422,8 @@ async function fetchHolidays() {
 
         const todayKey = getLocalDateKey(new Date());
         const todayPresent = attendanceList.filter((record) => {
-          const recordStatus = record.status?.toLowerCase();
-          const recordDate = getLocalDateKey(
-            record.date || record.attendanceDate || record.createdAt || record.checkInTime || record.checkinTime || record.updatedAt
-          );
-          return recordStatus === "present" && (!recordDate || recordDate === todayKey);
+          const recordDate = getLocalDateKey(getAttendanceDate(record));
+          return getAttendanceStatus(record) === "present" && (!recordDate || recordDate === todayKey);
         });
 
         setPresentRecords(todayPresent);
@@ -377,19 +441,13 @@ async function fetchHolidays() {
 
           const todayKey = getLocalDateKey(new Date());
           const absentOnly = attendanceData.filter((record) => {
-            const recordStatus = record.status?.toLowerCase();
-            const recordDate = getLocalDateKey(
-              record.date || record.attendanceDate || record.createdAt || record.checkInTime || record.checkinTime || record.updatedAt
-            );
-            return recordStatus === "absent" && (!recordDate || recordDate === todayKey);
+            const recordDate = getLocalDateKey(getAttendanceDate(record));
+            return getAttendanceStatus(record) === "absent" && (!recordDate || recordDate === todayKey);
           });
 
           const presentOnly = attendanceData.filter((record) => {
-            const recordStatus = record.status?.toLowerCase();
-            const recordDate = getLocalDateKey(
-              record.date || record.attendanceDate || record.createdAt || record.checkInTime || record.checkinTime || record.updatedAt
-            );
-            return recordStatus === "present" && (!recordDate || recordDate === todayKey);
+            const recordDate = getLocalDateKey(getAttendanceDate(record));
+            return getAttendanceStatus(record) === "present" && (!recordDate || recordDate === todayKey);
           });
 
           setAbsentRecords(absentOnly);
@@ -508,7 +566,12 @@ async function fetchHolidays() {
     };
 
     const handleAnnouncementDelete = async (announcementId) => {
-      if (!window.confirm("Delete this announcement?")) return;
+      const confirmed = await confirm({
+        title: "Delete announcement?",
+        message: "Are you sure you want to delete this announcement?",
+        confirmLabel: "Delete",
+      });
+      if (!confirmed) return;
 
       try {
         const token = localStorage.getItem("token");
@@ -583,9 +646,52 @@ async function fetchHolidays() {
           };
       }
     };
+
+    const toggleNotifications = () => {
+      if (!showBellDropdown && notificationButtonRef.current) {
+        const buttonRect = notificationButtonRef.current.getBoundingClientRect();
+        const dropdownWidth = Math.min(320, window.innerWidth - 24);
+        const isMobile = window.innerWidth < 640;
+        setNotificationPosition({
+          top: buttonRect.bottom + 8,
+          left: isMobile
+            ? 12
+            : Math.max(12, buttonRect.right - dropdownWidth),
+          width: dropdownWidth,
+        });
+      }
+      setShowBellDropdown((visible) => !visible);
+    };
+
+    const openAbsentDetails = () => {
+      const cardRect = absentCardRef.current?.getBoundingClientRect();
+      const popupWidth = Math.min(360, window.innerWidth - 24);
+      const isMobile = window.innerWidth < 640;
+
+      setAbsentPosition({
+        top: isMobile ? "50%" : (cardRect?.bottom || 0) + 8,
+        left: isMobile
+          ? "50%"
+          : Math.min(
+              Math.max(12, cardRect?.left || 12),
+              window.innerWidth - popupWidth - 12
+            ),
+        width: popupWidth,
+        transform: isMobile ? "translate(-50%, -50%)" : "none",
+      });
+      setShowAbsentModal(true);
+    };
  
     return (
       <div className="space-y-4">
+        {loading && (
+          <div className="flex justify-center items-center py-16 sm:py-20">
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
+          </div>
+        )}
+        {!loading && (
+          <>
+        {confirmationDialog}
         {/* Minimal Compact Header */}
         <div className="bg-transparent p-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -595,12 +701,13 @@ async function fetchHolidays() {
             <p className="text-xs text-slate-400">Overview of organization metrics & daily status</p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="hidden items-center gap-2 shrink-0 sm:flex">
             {/* Bell Icon & Dropdown */}
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowBellDropdown(!showBellDropdown)}
+                ref={notificationButtonRef}
+                onClick={toggleNotifications}
                 aria-label={`Notifications${announcements.length > 0 ? `, ${announcements.length} unread` : ""}`}
                 aria-expanded={showBellDropdown}
                 className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-xs hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
@@ -614,12 +721,14 @@ async function fetchHolidays() {
               </button>
 
               {showBellDropdown && (
-                <>
+                createPortal(
+                  <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowBellDropdown(false)} />
                   <div
                     role="dialog"
                     aria-label="Notifications"
-                    className="fixed left-1/2 top-1/2 z-50 mt-0 w-[calc(100vw-1.5rem)] max-w-[22rem] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-200/90 bg-white text-xs shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[22rem] sm:translate-x-0 sm:translate-y-0"
+                    className="fixed z-50 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-slate-200/90 bg-white text-xs shadow-xl"
+                    style={notificationPosition || { top: 80, left: 12, width: "calc(100vw - 1.5rem)" }}
                   >
                     <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/50">
                       <h3 className="font-semibold text-slate-900">Announcements</h3>
@@ -650,7 +759,7 @@ async function fetchHolidays() {
                                 <button onClick={() => handleAnnouncementEdit(announcement)} className="p-0.5 text-slate-400 hover:text-slate-700">
                                   <Edit3 className="h-3 w-3" />
                                 </button>
-                                <button onClick={() => handleAnnouncementDelete(announcement._id)} className="p-0.5 text-slate-400 hover:text-rose-600">
+                                <button onClick={() => handleAnnouncementDelete(announcement._id || announcement.id)} className="p-0.5 text-slate-400 hover:text-rose-600">
                                   <Trash2 className="h-3 w-3" />
                                 </button>
                               </div>
@@ -669,7 +778,9 @@ async function fetchHolidays() {
                       View all
                     </button>
                   </div>
-                </>
+                  </>,
+                  document.body
+                )
               )}
             </div>
 
@@ -716,7 +827,8 @@ async function fetchHolidays() {
           {/* Absent Card */}
           <button
             type="button"
-            onClick={() => setShowAbsentModal(true)}
+            ref={absentCardRef}
+            onClick={openAbsentDetails}
             className="bg-white p-3.5 border border-rose-200/80 rounded-xl shadow-xs hover:bg-rose-50/20 hover:border-rose-300 transition-all text-left group"
           >
             <div className="flex items-center justify-between">
@@ -738,10 +850,10 @@ async function fetchHolidays() {
         </div>
 
         {/* Corporate Events & Celebrations */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 items-start gap-4">
           
           {/* Holidays */}
-          <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
+          <div className="self-start h-fit bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <Calendar className="h-3.5 w-3.5 text-slate-400" />
@@ -955,15 +1067,24 @@ async function fetchHolidays() {
           </div>
         )}
 
-        {/* Absent Modal */}
-      {/* Absent Modal */}
+        {/* Absent Drawer */}
 {showAbsentModal && (
-  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-    <div className="bg-white w-full max-w-sm rounded-xl shadow-xl border border-slate-200/90 overflow-hidden">
+  <div
+    className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs animate-fade-in"
+    onClick={() => setShowAbsentModal(false)}
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="absent-today-title"
+      onClick={(event) => event.stopPropagation()}
+      style={absentPosition || { top: 12, left: 12, width: "calc(100vw - 24px)" }}
+      className="fixed max-w-[360px] max-h-[70vh] rounded-xl bg-white shadow-xl border border-slate-200/90 overflow-hidden"
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
         <div className="flex items-center gap-2">
           <UserX className="h-4 w-4 text-rose-600" />
-          <h3 className="text-xs font-semibold text-slate-900">
+          <h3 id="absent-today-title" className="text-xs font-semibold text-slate-900">
             Absent Today
           </h3>
         </div>
@@ -977,7 +1098,7 @@ async function fetchHolidays() {
         </button>
       </div>
 
-      <div className="p-3 max-h-[50vh] overflow-y-auto">
+      <div className="p-3 max-h-[calc(70vh-53px)] overflow-y-auto">
         {absentRecords.length === 0 ? (
           <div className="text-center py-6 text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
             No absent records today
@@ -1123,7 +1244,7 @@ async function fetchHolidays() {
                           <Edit3 className="h-3 w-3" /> Edit
                         </button>
                         <button
-                          onClick={() => handleAnnouncementDelete(announcement._id)}
+                          onClick={() => handleAnnouncementDelete(announcement._id || announcement.id)}
                           className="flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:text-rose-700"
                         >
                           <Trash2 className="h-3 w-3" /> Delete
@@ -1145,6 +1266,8 @@ async function fetchHolidays() {
               </div>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     );

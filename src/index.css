@@ -134,9 +134,9 @@ button {
   min-width: 0;
 }
 
-.page-content * {
+/* .page-content * {
   max-width: 100%;
-}
+} */
 
 /* Responsive helpers */
 @media (max-width: 768px) {
@@ -171,4 +171,26 @@ button {
 
 .animate-fade-in {
   animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #e8edf3 25%, #f8fafc 50%, #e8edf3 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+  }
 }

@@ -21,6 +21,7 @@ import {
   ListTodo,
   MessageSquare
 } from "lucide-react";
+import { useConfirm } from "../../components/common/ConfirmDialog";
 
 const BASE_URL =
   "https://kt-backend-1.onrender.com/api/projectManage/project";
@@ -45,6 +46,7 @@ const TEAM_LEAD_URL =
   "https://kt-backend-1.onrender.com/api/teamLead/team";
 
 export default function Team() {
+  const { confirm, confirmationDialog } = useConfirm();
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -758,7 +760,7 @@ const fetchTasks = async (projectId = null) => {
     if (emp.employee) return getEmployeeName(emp.employee);
     if (emp.user) return getEmployeeName(emp.user);
 
-    return "Unknown";
+    return "Unknown"; 
   };
 
   const getEmployeeNameById = (value) => {
@@ -1208,7 +1210,12 @@ const fetchTasks = async (projectId = null) => {
   };
 
   const handleDeleteTask = async (taskId) => {
-    if (!window.confirm("Are you sure you want to delete this task?")) return;
+    const confirmed = await confirm({
+      title: "Delete task?",
+      message: "Are you sure you want to delete this task?",
+      confirmLabel: "Delete",
+    });
+    if (!confirmed) return;
     try {
       await axios.delete(`${TASK_URL}/delete/${taskId}`);
       await fetchTasks(selectedProject?._id || null);
@@ -1392,6 +1399,7 @@ const fetchTasks = async (projectId = null) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 sm:p-6">
+      {confirmationDialog}
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
@@ -1417,11 +1425,8 @@ const fetchTasks = async (projectId = null) => {
         </div>
 
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="text-center">
-              <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
-              <p className="mt-4 text-gray-600">Loading your projects...</p>
-            </div>
+          <div className="flex justify-center items-center py-16 sm:py-20">
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
           </div>
         ) : (
           <div className="space-y-6">

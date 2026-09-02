@@ -964,9 +964,8 @@ export default function Applications() {
       {/* Main Content */}
       <div className="bg-white border border-gray-300 rounded-lg sm:rounded-xl shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12 sm:py-16">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-gray-200 border-t-blue-600 animate-spin rounded-full"></div>
-            <p className="mt-3 text-xs sm:text-sm text-gray-500">Loading applications...</p>
+          <div className="flex justify-center items-center py-16 sm:py-20">
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
           </div>
         ) : applications.length === 0 ? (
           <div className="text-center py-12 sm:py-16">
@@ -1452,7 +1451,7 @@ export default function Applications() {
               >
                 Add Round
               </button>
-            </div>
+            </div> 
           </div>
         </div>
       )}

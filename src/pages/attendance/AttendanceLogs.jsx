@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   Calendar,
   Clock,
-  RefreshCw,
   Search,
   Filter,
   ChevronDown,
@@ -27,7 +26,7 @@ const AVATAR_COLORS = [
   'bg-indigo-600',
   'bg-teal-600',
 ];
-
+ 
 const WORKDAY_MINUTES = 9 * 60;
 
 /* =========================================================
@@ -46,31 +45,32 @@ const getTodayLocal = () => {
 /* =========================================================
    NORMALIZE API RESPONSE
 ========================================================= */
-const normalizeLogs = (payload) => {
+export const normalizeLogs = (payload) => {
   if (Array.isArray(payload)) return payload;
 
   if (!payload || typeof payload !== 'object') {
     return [];
   }
 
-  if (Array.isArray(payload.data)) {
-    return payload.data;
-  }
+  const nestedCandidates = [
+    payload.data,
+    payload.attendance,
+    payload.logs,
+    payload.records,
+    payload.result,
+    payload.items,
+    payload.data?.data,
+    payload.data?.attendance,
+    payload.data?.logs,
+    payload.data?.records,
+    payload.data?.result,
+    payload.data?.items,
+  ];
 
-  if (Array.isArray(payload.attendance)) {
-    return payload.attendance;
-  }
-
-  if (Array.isArray(payload.logs)) {
-    return payload.logs;
-  }
-
-  if (Array.isArray(payload.records)) {
-    return payload.records;
-  }
-
-  if (Array.isArray(payload.result)) {
-    return payload.result;
+  for (const candidate of nestedCandidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
   }
 
   return [];
@@ -94,10 +94,43 @@ const formatTime = (value) => {
   return value;
 };
 
-/* =========================================================
-   NORMALIZE STATUS
-========================================================= */
+const getApprovalState = (item) => {
+  const rawCandidates = [
+    item?.approvalStatus,
+    item?.attendance?.approvalStatus,
+    item?.status,
+    item?.attendanceStatus,
+    item?.attendance?.status,
+    item?.adminDecision,
+    item?.decision,
+  ];
+
+  for (const candidate of rawCandidates) {
+    const normalized = String(candidate ?? '')
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) continue;
+
+    if (['approved', 'approved by admin', 'accepted'].includes(normalized)) {
+      return 'approved';
+    }
+
+    if (['pending', 'waiting for approval'].includes(normalized)) {
+      return 'pending';
+    }
+
+    if (['rejected', 'declined', 'denied'].includes(normalized)) {
+      return 'rejected';
+    }
+  }
+
+  return '';
+};
+
 const normalizeStatus = (item) => {
+  const approvalStatus = getApprovalState(item);
+
   let status = String(
     item?.status ||
       item?.attendanceStatus ||
@@ -107,6 +140,29 @@ const normalizeStatus = (item) => {
   )
     .trim()
     .toLowerCase();
+
+  if (approvalStatus === 'pending') {
+    return 'pending';
+  }
+
+  if (approvalStatus === 'rejected') {
+    return 'rejected';
+  }
+
+  const hasApprovedCheckIn = Boolean(
+    item?.approvedCheckInTime ||
+      item?.checkInTime ||
+      item?.punchIn ||
+      item?.checkIn ||
+      item?.attendance?.checkInTime
+  );
+
+  if (
+    approvalStatus === 'approved' &&
+    hasApprovedCheckIn
+  ) {
+    return 'present';
+  }
 
   if (status === 'half-day' || status === 'halfday') {
     status = 'half day';
@@ -144,15 +200,8 @@ const normalizeStatus = (item) => {
   if (
     status === 'present' ||
     status === 'on time' ||
-    status === 'approved'
-  ) {
-    return 'present';
-  }
-
-  if (
-    item?.checkInTime ||
-    item?.punchIn ||
-    item?.approvedCheckInTime
+    status === 'approved' ||
+    status === 'accepted'
   ) {
     return 'present';
   }
@@ -164,14 +213,101 @@ const normalizeStatus = (item) => {
    MAP API LOG
 ========================================================= */
 const mapLog = (item, index) => {
-  const breaks = Array.isArray(item?.breaks)
-    ? item.breaks
-    : item?.breaks
-      ? [item.breaks]
-      : [];
+  const breaks = [
+    ...(Array.isArray(item?.breaks)
+      ? item.breaks
+      : item?.breaks
+        ? [item.breaks]
+        : []),
+    ...(item?.breakStart || item?.breakEnd
+      ? [
+          {
+            startTime: item.breakStart,
+            endTime: item.breakEnd,
+          },
+        ]
+      : []),
+    ...(Array.isArray(item?.sessions)
+      ? item.sessions
+          .filter(
+            (session) =>
+              session?.breakStart || session?.breakEnd
+          )
+          .map((session) => ({
+            startTime: session.breakStart,
+            endTime: session.breakEnd,
+          }))
+      : []),
+  ].filter((breakItem, breakIndex, allBreaks) => {
+    const key = `${breakItem?.startTime || ''}-${
+      breakItem?.endTime || ''
+    }`;
+
+    return (
+      allBreaks.findIndex(
+        (candidate) =>
+          `${candidate?.startTime || ''}-${
+            candidate?.endTime || ''
+          }` === key
+      ) === breakIndex
+    );
+  });
+
+  const firstSession = Array.isArray(item?.sessions)
+    ? item.sessions[0] || {}
+    : {};
+
+  const approvalStatus = getApprovalState(item);
+
+  const rawStatus = String(
+    item?.status ||
+      item?.attendanceStatus ||
+      item?.attendance?.status ||
+      item?.adminDecision ||
+      ''
+  )
+    .trim()
+    .toLowerCase();
+
+  // =========================================================
+  // IMPORTANT:
+  // Some HR/admin APIs store approval on status instead of approvalStatus.
+  // We must still enable timeline for those approved records.
+  // =========================================================
+  const isApproved =
+    approvalStatus === 'approved' ||
+    rawStatus === 'approved' ||
+    rawStatus === 'accepted' ||
+    item?.isApproved === true;
+
+  const approvedCheckIn =
+    isApproved
+      ? (
+          item?.approvedCheckInTime ||
+          item?.checkInTime ||
+          item?.punchIn ||
+          firstSession.checkin ||
+          ''
+        )
+      : '';
+
+  const approvedCheckOut =
+    isApproved
+      ? (
+          item?.checkOutTime ||
+          item?.punchOut ||
+          firstSession.checkout ||
+          ''
+        )
+      : '';
+
+  const approvedBreaks = isApproved ? breaks : [];
 
   return {
-    id: item?._id || item?.id || `log-${index}`,
+    id:
+      item?._id ||
+      item?.id ||
+      `log-${index}`,
 
     name:
       item?.employeeName ||
@@ -194,27 +330,35 @@ const mapLog = (item, index) => {
       item?.createdAt ||
       '',
 
-    checkIn:
-      item?.checkInTime ||
-      item?.approvedCheckInTime ||
-      item?.punchIn ||
-      '',
+    // =======================================================
+    // ONLY APPROVED CHECK-IN IS USED BY TIMELINE
+    // =======================================================
+    checkIn: approvedCheckIn,
 
-    checkOut:
-      item?.checkOutTime ||
-      item?.punchOut ||
-      '',
+    // =======================================================
+    // CHECK-OUT ONLY AFTER APPROVAL
+    // =======================================================
+    checkOut: approvedCheckOut,
 
-    breaks,
+    // =======================================================
+    // BREAKS ONLY AFTER APPROVAL
+    // =======================================================
+    breaks: approvedBreaks,
 
-    totalHours:
-      item?.totalWorkTimeDisplay ||
-      item?.totalWorkTimeHours ||
-      item?.totalHours ||
-      item?.hours ||
-      '0h',
+    totalHours: isApproved
+      ? (
+          item?.totalWorkTimeDisplay ||
+          item?.totalWorkTimeHours ||
+          item?.totalHours ||
+          item?.hours ||
+          '0h'
+        )
+      : '0h',
 
-    isLate: item?.isLate === true,
+    isLate: isApproved && item?.isLate === true,
+
+    // Keep approval status separately
+    approvalStatus,
 
     status: normalizeStatus(item),
 
@@ -359,8 +503,10 @@ const calculateAttendanceProgress = (
     .filter(
       (item) =>
         item.start !== null &&
+        item.end !== null &&
         item.start >= checkInMinutes &&
-        item.start < activeEnd
+        item.start < activeEnd &&
+        item.end > item.start
     )
     .sort((a, b) => a.start - b.start);
 
@@ -439,31 +585,40 @@ const AttendanceTimeline = ({
   checkIn,
   breaks,
   checkOut,
+  approvalStatus,
 }) => {
+  const [
+    localHoveredSegment,
+    setLocalHoveredSegment,
+  ] = useState(null);
+
+  // =========================================================
+  // NEVER RUN TIMER UNTIL APPROVED
+  // =========================================================
+  if (approvalStatus !== 'approved') {
+    return (
+      <div className="w-full bg-gray-100 h-6 rounded-lg flex items-center justify-center text-[10px] text-gray-500">
+        {approvalStatus === 'pending'
+          ? 'Waiting for approval'
+          : approvalStatus === 'rejected'
+            ? 'Attendance rejected'
+            : 'No timeline data available'}
+      </div>
+    );
+  }
+
   const segments = calculateAttendanceProgress(
     checkIn,
     breaks,
     checkOut
   );
 
-  const [
-    localHoveredSegment,
-    setLocalHoveredSegment,
-  ] = useState(null);
+  // Timeline width is always based on the configured 9-hour workday.
+  const totalDuration = WORKDAY_MINUTES;
 
   if (segments.length === 0) {
     return (
-      <div className="w-full bg-gray-100 h-5 rounded-lg flex items-center justify-center text-[10px] text-gray-500">
-        No timeline data available
-      </div>
-    );
-  }
-
-  const totalDuration = WORKDAY_MINUTES;
-
-  if (totalDuration <= 0) {
-    return (
-      <div className="w-full bg-gray-100 h-5 rounded-lg flex items-center justify-center text-[10px] text-gray-500">
+      <div className="w-full bg-gray-100 h-6 rounded-lg flex items-center justify-center text-[10px] text-gray-500">
         No timeline data available
       </div>
     );
@@ -651,9 +806,6 @@ export default function AttendanceLogs() {
   const [loading, setLoading] =
     useState(true);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
-
   const [error, setError] =
     useState('');
 
@@ -676,20 +828,17 @@ export default function AttendanceLogs() {
     useState(null);
 
   const token =
-    localStorage.getItem('token');
+    typeof window !== 'undefined'
+      ? localStorage.getItem('token')
+      : null;
 
   /* =========================================================
      FETCH ATTENDANCE
   ========================================================= */
   const fetchAttendanceLogs = async (
-    showLoader = true,
     date = selectedDate
   ) => {
-    if (showLoader) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
+    setLoading(true);
 
     setError('');
 
@@ -745,11 +894,7 @@ export default function AttendanceLogs() {
         'Unable to load attendance logs.'
       );
     } finally {
-      if (showLoader) {
-        setLoading(false);
-      } else {
-        setRefreshing(false);
-      }
+      setLoading(false);
     }
   };
 
@@ -757,10 +902,7 @@ export default function AttendanceLogs() {
      DATE CHANGE FETCH
   ========================================================= */
   useEffect(() => {
-    fetchAttendanceLogs(
-      true,
-      selectedDate
-    );
+    fetchAttendanceLogs(selectedDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
@@ -1211,30 +1353,6 @@ export default function AttendanceLogs() {
             </span>
           </button>
 
-          {/* REFRESH */}
-          <button
-            onClick={() =>
-              fetchAttendanceLogs(false)
-            }
-            disabled={
-              refreshing || loading
-            }
-            className="bg-blue-600 text-white px-2 sm:px-4 py-1 hover:bg-blue-700 flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
-                refreshing
-                  ? 'animate-spin'
-                  : ''
-              }`}
-            />
-
-            <span className="hidden sm:inline">
-              {refreshing
-                ? 'Refreshing...'
-                : 'Refresh'}
-            </span>
-          </button>
         </div>
       </div>
 
@@ -1631,13 +1749,10 @@ export default function AttendanceLogs() {
                           <td className="px-3 py-3 min-w-[280px]">
 
                             <AttendanceTimeline
-                              checkIn={
-                                log.checkIn
-                              }
+                              checkIn={log.checkIn}
                               breaks={log.breaks}
-                              checkOut={
-                                log.checkOut
-                              }
+                              checkOut={log.checkOut}
+                              approvalStatus={log.approvalStatus}
                             />
 
                           </td>
@@ -1742,13 +1857,10 @@ export default function AttendanceLogs() {
                         <div className="mt-3">
 
                           <AttendanceTimeline
-                            checkIn={
-                              log.checkIn
-                            }
+                            checkIn={log.checkIn}
                             breaks={log.breaks}
-                            checkOut={
-                              log.checkOut
-                            }
+                            checkOut={log.checkOut}
+                            approvalStatus={log.approvalStatus}
                           />
 
                         </div>
@@ -1817,7 +1929,7 @@ export default function AttendanceLogs() {
       {selectedLog && (() => {
         const {
           segments,
-          workingMinutes,
+          workingMinutes, 
           breakMinutes,
         } = getLogDetails(selectedLog);
 
@@ -1912,7 +2024,7 @@ export default function AttendanceLogs() {
                       No timeline data available
                     </p>
                   )}
-                </div>
+                </div> 
               </div>
             </div>
           </div>
