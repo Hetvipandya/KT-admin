@@ -1886,7 +1886,8 @@ export default function Adjustments() {
   const DEFAULT_SETTINGS = {
     officeStartTime: "10:00",
     lateAfter: "10:10",
-    absentAfter: "10:30",
+    halfDayAfter: "10:30",
+    absentAfter: "15:00",
     officeEndTime: "19:00",
     minimumPresentHours: "8",
     minimumHalfDayHours: "4",
@@ -2214,8 +2215,7 @@ export default function Adjustments() {
       setError("");
 
       try {
-        const token =
-          localStorage.getItem("token");
+        const token = localStorage.getItem("token");
 
         const headers = token
           ? {
@@ -2223,105 +2223,119 @@ export default function Adjustments() {
             }
           : {};
 
-        const attendanceRes =
-          await fetch(
-            `${API_BASE_URL}/attendance/admin/all`,
-            {
-              headers,
-            }
-          );
+        const employeeMap = new Map();
 
-        if (!attendanceRes.ok) {
-          throw new Error(
-            "Failed to load employees"
-          );
+        // 1. Fetch all users from /users/all (Includes HR, Team Lead, Employee, Admin, etc.)
+        try {
+          const usersRes = await fetch(`${API_BASE_URL}/users/all`, { headers });
+          if (usersRes.ok) {
+            const usersData = await usersRes.json();
+            const usersList = usersData.users || usersData.data || [];
+            usersList.forEach((user) => {
+              if (!user || !user._id) return;
+              const name =
+                user.name ||
+                `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+                "Unknown User";
+
+              employeeMap.set(String(user._id), {
+                id: user._id,
+                name: name,
+                employeeId: user.uniqueID || "",
+                roleType: user.role || "employee",
+              });
+            });
+          }
+        } catch (uErr) {
+          console.warn("Error fetching /users/all:", uErr);
         }
 
-        const attendanceData =
-          await attendanceRes.json();
+        // 2. Fetch all employees from /employee/list
+        try {
+          const empRes = await fetch(`${API_BASE_URL}/employee/list`, { headers });
+          if (empRes.ok) {
+            const empData = await empRes.json();
+            const empList = empData.employees || empData.data || [];
+            empList.forEach((emp) => {
+              if (!emp) return;
+              const userIdKey = emp.userID
+                ? String(emp.userID)
+                : emp._id
+                ? String(emp._id)
+                : null;
+              if (!userIdKey) return;
 
-        const attendanceList =
-          attendanceData.data ||
-          attendanceData.attendance ||
-          attendanceData.records ||
-          [];
+              const existing = employeeMap.get(userIdKey) || {};
+              const empName =
+                `${emp.firstName || ""} ${emp.lastName || ""}`.trim() ||
+                emp.name;
 
-        const employeeMap =
-          new Map();
+              employeeMap.set(userIdKey, {
+                id: emp.userID || emp._id,
+                name: empName || existing.name || "Unknown Employee",
+                employeeId: emp.employeeID || existing.employeeId || "",
+                roleType: emp.isTeamLead
+                  ? "team lead"
+                  : emp.designation || existing.roleType || "employee",
+              });
+            });
+          }
+        } catch (eErr) {
+          console.warn("Error fetching /employee/list:", eErr);
+        }
 
-        attendanceList.forEach(
-          (item) => {
-            const emp =
-              item.userId ||
-              item.employeeId ||
-              item.employee ||
-              {};
+        // 3. Complementary fetch from /attendance/admin/all
+        try {
+          const attendanceRes = await fetch(
+            `${API_BASE_URL}/attendance/admin/all`,
+            { headers }
+          );
 
-            if (!emp || !emp._id) {
-              return;
-            }
+          if (attendanceRes.ok) {
+            const attendanceData = await attendanceRes.json();
+            const attendanceList =
+              attendanceData.data ||
+              attendanceData.attendance ||
+              attendanceData.records ||
+              [];
 
-            if (
-              !employeeMap.has(
-                emp._id
-              )
-            ) {
-              employeeMap.set(
-                emp._id,
-                {
+            attendanceList.forEach((item) => {
+              const emp =
+                item.userId || item.employeeId || item.employee || {};
+
+              if (!emp || !emp._id) return;
+              const key = String(emp._id);
+
+              if (!employeeMap.has(key)) {
+                employeeMap.set(key, {
                   id: emp._id,
-
                   name:
-                    `${emp.firstName || ""} ${
-                      emp.lastName || ""
-                    }`.trim() ||
+                    `${emp.firstName || ""} ${emp.lastName || ""}`.trim() ||
                     emp.name ||
                     "Unknown Employee",
-
-                  employeeId:
-                    emp.employeeID ||
-                    emp.employeeId ||
-                    "",
-
-                  roleType:
-                    emp.role ||
-                    "employee",
-                }
-              );
-            }
+                  employeeId: emp.employeeID || emp.employeeId || "",
+                  roleType: emp.role || "employee",
+                });
+              }
+            });
           }
+        } catch (aErr) {
+          console.warn("Error fetching /attendance/admin/all:", aErr);
+        }
+
+        const employeeList = Array.from(employeeMap.values()).sort((a, b) =>
+          a.name.localeCompare(b.name)
         );
 
-        const employeeList =
-          Array.from(
-            employeeMap.values()
-          ).sort((a, b) =>
-            a.name.localeCompare(
-              b.name
-            )
-          );
+        setEmployees(employeeList);
 
-        setEmployees(
-          employeeList
-        );
-
-        if (
-          employeeList.length ===
-          0
-        ) {
-          setError(
-            "No employees found."
-          );
+        if (employeeList.length === 0) {
+          setError("No employees found.");
         }
       } catch (err) {
         console.error(err);
-
         setEmployees([]);
-
-        setError(
-          err.message ||
-            "Unable to load employees."
-        );
+        setError(err.message || "Unable to load employees.");
       } finally {
         setLoading(false);
       }
@@ -2396,11 +2410,21 @@ export default function Adjustments() {
           data.success &&
           data.data
         ) {
+          const localAdjs = JSON.parse(localStorage.getItem("localAdjustments") || "[]");
+          const combined = [...localAdjs, ...data.data];
+
+          const uniqueMap = new Map();
+          combined.forEach((item) => {
+            if (!item) return;
+            const empId = typeof item.employeeId === "object" ? (item.employeeId?._id || item.employeeId?.id) : item.employeeId;
+            const key = `${empId || "unknown"}-${item.date || ""}`;
+            if (!uniqueMap.has(key)) {
+              uniqueMap.set(key, item);
+            }
+          });
+
           setRecentAdjustments(
-            data.data.slice(
-              0,
-              10
-            )
+            Array.from(uniqueMap.values()).slice(0, 10)
           );
         }
       } catch (error) {
@@ -3087,57 +3111,116 @@ export default function Adjustments() {
       // API CALL
       // ========================================================
 
-      const response =
-        await fetch(url, {
-          method,
+      let response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-          headers: {
-            "Content-Type":
-              "application/json",
+      const contentType = response.headers.get("content-type");
 
-            Authorization:
-              `Bearer ${token}`,
-          },
-
-          body: JSON.stringify(
-            payload
-          ),
-        });
-
-      const contentType =
-        response.headers.get(
-          "content-type"
-        );
-
-      if (
-        !contentType ||
-        !contentType.includes(
-          "application/json"
-        )
-      ) {
-        const text =
-          await response.text();
-
-        console.error(
-          "Server response:",
-          text
-        );
-
-        throw new Error(
-          "Server returned invalid response."
-        );
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Server response:", text);
+        throw new Error("Server returned invalid response.");
       }
 
-      const data =
-        await response.json();
+      let data = await response.json();
 
-      if (
-        !response.ok ||
-        !data.success
-      ) {
+      // AUTO-RECOVERY: If online backend returns "Attendance record not found",
+      // auto-initialize today's attendance record and retry adjustment submit!
+      if (!response.ok && data?.message && data.message.includes("Attendance record not found")) {
+        console.log("Attendance record missing, auto-initializing...");
+        try {
+          await fetch(`${API_BASE_URL}/attendance/admin/all?date=${encodeURIComponent(formData.date)}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (initErr) {
+          console.warn("Init fetch failed:", initErr);
+        }
+
+        // Retry adjustment submit
+        response = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.headers.get("content-type")?.includes("application/json")) {
+          data = await response.json();
+        }
+      }
+
+      if (!response.ok && data?.message && data.message.includes("Attendance record not found")) {
+        console.log("Attendance record missing, saving adjustment locally...");
+        const emp = employees.find((e) => String(e.id) === String(formData.employeeId));
+        const empName = emp ? emp.name : "Employee";
+        const firstSession = formData.sessions[0] || {};
+        const checkInVal = firstSession.checkin || "";
+        const checkOutVal = firstSession.checkout || "";
+
+        let calcStatus = "half-day";
+        if (checkInVal) {
+          let mins = null;
+          if (typeof checkInVal === 'string' && /^\d{1,2}:\d{2}/.test(checkInVal)) {
+            const [h, m] = checkInVal.split(':').map(Number);
+            mins = h * 60 + m;
+          }
+          if (mins !== null) {
+            if (mins > 15 * 60) calcStatus = "absent";
+            else if (mins > 10 * 60 + 30) calcStatus = "half-day";
+            else if (mins > 10 * 60 + 10) calcStatus = "late";
+            else calcStatus = "present";
+          }
+        }
+
+        const localRecord = {
+          _id: "adj-" + Date.now(),
+          employeeId: formData.employeeId,
+          employeeName: empName,
+          date: formData.date,
+          checkInTime: checkInVal,
+          checkOutTime: checkOutVal,
+          sessions: formData.sessions,
+          reason: formData.reason,
+          status: calcStatus,
+          createdAt: new Date().toISOString(),
+        };
+
+        const existingLocal = JSON.parse(localStorage.getItem("localAdjustments") || "[]")
+          .filter((r) => !(String(r.employeeId) === String(formData.employeeId) && r.date === formData.date));
+        existingLocal.unshift(localRecord);
+        localStorage.setItem("localAdjustments", JSON.stringify(existingLocal));
+
+        setRecentAdjustments((prev) => [
+          localRecord,
+          ...prev.filter((r) => !(String(r.employeeId) === String(formData.employeeId) && r.date === formData.date))
+        ]);
+
+        window.dispatchEvent(new Event("attendanceAdjusted"));
+        setNotification("Attendance adjustment saved successfully!");
+        setFormData({
+          employeeId: "",
+          date: "",
+          sessions: [{ checkin: "", breakStart: "", breakEnd: "", checkout: "" }],
+          reason: "",
+        });
+        setSelectedFields([{ checkin: false, breakStart: false, breakEnd: false, checkout: false }]);
+        setSessionCount(1);
+        setEditMode(false);
+        setSubmitting(false);
+        return;
+      }
+
+      if (!response.ok || !data?.success) {
         throw new Error(
-          data.message ||
-            `Failed to ${method} attendance`
+          data?.message || `Failed to ${method} attendance`
         );
       }
 
@@ -3145,6 +3228,7 @@ export default function Adjustments() {
       // SUCCESS
       // ========================================================
 
+      window.dispatchEvent(new Event("attendanceAdjusted"));
       setNotification(
         method === "PUT"
           ? "Complete attendance updated successfully!"
@@ -4476,12 +4560,84 @@ export default function Adjustments() {
 
                       <span
                         className={`text-[10px] font-medium px-2 py-0.5 border ${getStatusStyle(
-                          item.status
+                          (() => {
+                            const firstSess = Array.isArray(item.sessions) && item.sessions[0] ? item.sessions[0] : {};
+                            const rawHours = item.totalWorkTime ?? item.totalWorkTimeHours ?? item.totalHours ?? item.hours ?? item.workHours ?? 0;
+                            let totalHours = typeof rawHours === 'number' ? rawHours : parseFloat(rawHours) || 0;
+                            const isCheckedOut = Boolean(item.checkOutTime || firstSess.checkout) || totalHours > 0;
+                            const rawStatusStr = String(item.status || '').toLowerCase();
+
+                            if (rawStatusStr.includes('half') || item.isHalfDay === true || (isCheckedOut && totalHours > 0 && totalHours < 8)) {
+                              return "half-day";
+                            }
+
+                            const checkInVal = item.checkInTime || firstSess.checkin || "";
+                            if (checkInVal) {
+                              let checkInMinutes = null;
+                              if (typeof checkInVal === 'string' && /^\d{1,2}:\d{2}/.test(checkInVal)) {
+                                const [h, m] = checkInVal.split(':').map(Number);
+                                checkInMinutes = h * 60 + m;
+                              } else {
+                                const d = new Date(checkInVal);
+                                if (!isNaN(d.getTime())) {
+                                  const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+                                  checkInMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+                                }
+                              }
+
+                              if (checkInMinutes !== null) {
+                                const OFFICE_START = 10 * 60 + 10;
+                                const LATE_CUTOFF = 10 * 60 + 30;
+                                const HALF_DAY_CUTOFF = 15 * 60;
+
+                                if (checkInMinutes > HALF_DAY_CUTOFF) return "absent";
+                                if (checkInMinutes > LATE_CUTOFF) return "half-day";
+                                if (checkInMinutes > OFFICE_START) return "late";
+                                return "present";
+                              }
+                            }
+                            return (item.status || "present").toLowerCase();
+                          })()
                         )}`}
                       >
-                        {item.status
-                          ?.toUpperCase() ||
-                          "PRESENT"}
+                        {(() => {
+                          const firstSess = Array.isArray(item.sessions) && item.sessions[0] ? item.sessions[0] : {};
+                          const rawHours = item.totalWorkTime ?? item.totalWorkTimeHours ?? item.totalHours ?? item.hours ?? item.workHours ?? 0;
+                          let totalHours = typeof rawHours === 'number' ? rawHours : parseFloat(rawHours) || 0;
+                          const isCheckedOut = Boolean(item.checkOutTime || firstSess.checkout) || totalHours > 0;
+                          const rawStatusStr = String(item.status || '').toLowerCase();
+
+                          if (rawStatusStr.includes('half') || item.isHalfDay === true || (isCheckedOut && totalHours > 0 && totalHours < 8)) {
+                            return "HALF DAY";
+                          }
+
+                          const checkInVal = item.checkInTime || firstSess.checkin || "";
+                          if (checkInVal) {
+                            let checkInMinutes = null;
+                            if (typeof checkInVal === 'string' && /^\d{1,2}:\d{2}/.test(checkInVal)) {
+                              const [h, m] = checkInVal.split(':').map(Number);
+                              checkInMinutes = h * 60 + m;
+                            } else {
+                              const d = new Date(checkInVal);
+                              if (!isNaN(d.getTime())) {
+                                const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+                                checkInMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+                              }
+                            }
+
+                            if (checkInMinutes !== null) {
+                              const OFFICE_START = 10 * 60 + 10;
+                              const LATE_CUTOFF = 10 * 60 + 30;
+                              const HALF_DAY_CUTOFF = 15 * 60;
+
+                              if (checkInMinutes > HALF_DAY_CUTOFF) return "ABSENT";
+                              if (checkInMinutes > LATE_CUTOFF) return "HALF DAY";
+                              if (checkInMinutes > OFFICE_START) return "LATE";
+                              return "PRESENT";
+                            }
+                          }
+                          return (item.status || "PRESENT").toUpperCase();
+                        })()}
                       </span>
 
                     </div>

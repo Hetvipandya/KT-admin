@@ -10,6 +10,11 @@ import {
   ArrowUpDown,
   FileSpreadsheet,
   X,
+  Briefcase,
+  Coffee,
+  PauseCircle,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -129,84 +134,106 @@ const getApprovalState = (item) => {
 };
 
 const normalizeStatus = (item) => {
-  const approvalStatus = getApprovalState(item);
+  const approvalState = getApprovalState(item);
 
-  let status = String(
+  if (approvalState === 'pending') {
+    return 'pending';
+  }
+
+  if (approvalState === 'rejected') {
+    return 'rejected';
+  }
+
+  const rawStatus = String(
     item?.status ||
       item?.attendanceStatus ||
       item?.attendance?.status ||
-      item?.adminDecision ||
       ''
   )
     .trim()
     .toLowerCase();
 
-  if (approvalStatus === 'pending') {
-    return 'pending';
+  if (rawStatus === 'onleave' || rawStatus === 'leave') {
+    return 'on leave';
   }
 
-  if (approvalStatus === 'rejected') {
-    return 'rejected';
-  }
+  // Calculate status dynamically based on Check-In time (10:00-10:10 Present, 10:11-10:30 Late, 10:31-15:00 Half Day, >15:00 Absent)
+  const checkInVal = item?.approvedCheckInTime || item?.checkInTime || item?.checkIn || item?.punchIn;
+  const checkInMinutes = parseTimeToMinutes(checkInVal);
 
-  const hasApprovedCheckIn = Boolean(
-    item?.approvedCheckInTime ||
-      item?.checkInTime ||
-      item?.punchIn ||
-      item?.checkIn ||
-      item?.attendance?.checkInTime
-  );
+  if (checkInMinutes !== null) {
+    const OFFICE_START = 10 * 60 + 10; // 10:10 AM (610 mins)
+    const LATE_CUTOFF = 10 * 60 + 30;  // 10:30 AM (630 mins)
+    const HALF_DAY_CUTOFF = 15 * 60;   // 3:00 PM / 15:00 (900 mins)
 
-  if (
-    approvalStatus === 'approved' &&
-    hasApprovedCheckIn
-  ) {
-    return 'present';
-  }
-
-  if (status === 'half-day' || status === 'halfday') {
-    status = 'half day';
-  }
-
-  if (status === 'onleave' || status === 'leave') {
-    status = 'on leave';
+    if (checkInMinutes > HALF_DAY_CUTOFF) {
+      return 'absent';
+    }
+    if (checkInMinutes > LATE_CUTOFF) {
+      return 'half day';
+    }
+    if (checkInMinutes > OFFICE_START) {
+      return 'late';
+    }
+    if (checkInMinutes <= OFFICE_START) {
+      return 'present';
+    }
   }
 
   if (
     item?.isAbsent === true ||
     item?.absent === true ||
-    status === 'absent'
+    rawStatus === 'absent' ||
+    item?.isAbsentDueToLate
   ) {
     return 'absent';
   }
 
-  if (status === 'half day') {
+  // Parse working hours (< 8 hours is Half Day)
+  const rawHours =
+    item?.totalWorkTime ??
+    item?.totalWorkTimeHours ??
+    item?.totalHours ??
+    item?.hours ??
+    item?.workingHours ??
+    0;
+
+  let totalHours = 0;
+  if (typeof rawHours === 'number') {
+    totalHours = rawHours;
+  } else if (typeof rawHours === 'string') {
+    totalHours = parseFloat(rawHours) || 0;
+  }
+
+  const checkOutVal = item?.checkOutTime || item?.checkOut || item?.punchOut;
+  const isCheckedOut = Boolean(checkOutVal) || totalHours > 0;
+
+  if (
+    rawStatus === 'half-day' ||
+    rawStatus === 'halfday' ||
+    rawStatus === 'half day' ||
+    item?.isHalfDay === true ||
+    (isCheckedOut && totalHours > 0 && totalHours < 8)
+  ) {
     return 'half day';
   }
 
-  if (status === 'on leave') {
-    return 'on leave';
-  }
-
-  if (
-    item?.isLate === true &&
-    status !== 'absent' &&
-    status !== 'half day' &&
-    status !== 'on leave'
-  ) {
+  if (item?.isLate === true || rawStatus === 'late') {
     return 'late';
   }
 
   if (
-    status === 'present' ||
-    status === 'on time' ||
-    status === 'approved' ||
-    status === 'accepted'
+    rawStatus === 'present' ||
+    rawStatus === 'on time'
   ) {
     return 'present';
   }
 
-  return 'unknown';
+  if (totalHours >= 8) {
+    return 'present';
+  }
+
+  return rawStatus || 'unknown';
 };
 
 /* =========================================================
@@ -274,6 +301,13 @@ const mapLog = (item, index) => {
   // Some HR/admin APIs store approval on status instead of approvalStatus.
   // We must still enable timeline for those approved records.
   // =========================================================
+  const hasCheckIn = Boolean(
+    item?.approvedCheckInTime ||
+    item?.checkInTime ||
+    item?.punchIn ||
+    firstSession.checkin
+  );
+
   const isApproved =
     approvalStatus === 'approved' ||
     rawStatus === 'approved' ||
@@ -281,7 +315,7 @@ const mapLog = (item, index) => {
     item?.isApproved === true;
 
   const approvedCheckIn =
-    isApproved
+    isApproved || hasCheckIn
       ? (
           item?.approvedCheckInTime ||
           item?.checkInTime ||
@@ -292,7 +326,7 @@ const mapLog = (item, index) => {
       : '';
 
   const approvedCheckOut =
-    isApproved
+    isApproved || hasCheckIn
       ? (
           item?.checkOutTime ||
           item?.punchOut ||
@@ -301,7 +335,7 @@ const mapLog = (item, index) => {
         )
       : '';
 
-  const approvedBreaks = isApproved ? breaks : [];
+  const approvedBreaks = (isApproved || hasCheckIn) ? breaks : [];
 
   return {
     id:
@@ -358,7 +392,7 @@ const mapLog = (item, index) => {
     isLate: isApproved && item?.isLate === true,
 
     // Keep approval status separately
-    approvalStatus,
+    approvalStatus: isApproved ? 'approved' : approvalStatus,
 
     status: normalizeStatus(item),
 
@@ -659,16 +693,16 @@ const AttendanceTimeline = ({
   const getSegmentIcon = (color) => {
     switch (color) {
       case 'blue':
-        return '💼';
+        return <Briefcase className="h-3 w-3 inline text-blue-100" />;
 
       case 'yellow':
-        return '☕';
+        return <Coffee className="h-3 w-3 inline text-amber-100" />;
 
       case 'gray':
-        return '⏸️';
+        return <PauseCircle className="h-3 w-3 inline text-gray-100" />;
 
       default:
-        return '';
+        return null;
     }
   };
 
@@ -782,13 +816,22 @@ const AttendanceTimeline = ({
       </div>
 
       <div className="flex justify-between text-xs font-medium text-gray-600 mt-2">
-        <span>📥 Check-in</span>
+        <span className="flex items-center gap-1.5">
+          <LogIn className="h-3.5 w-3.5 text-emerald-600" />
+          Check-in
+        </span>
 
         {breaks?.length > 0 && (
-            <span>☕ Break</span>
-          )}
+          <span className="flex items-center gap-1.5">
+            <Coffee className="h-3.5 w-3.5 text-amber-600" />
+            Break
+          </span>
+        )}
 
-        <span>📤 Check-out</span>
+        <span className="flex items-center gap-1.5">
+          <LogOut className="h-3.5 w-3.5 text-rose-600" />
+          Check-out
+        </span>
       </div>
     </div>
   );
@@ -850,38 +893,263 @@ export default function AttendanceLogs() {
         return;
       }
 
-      const url =
-        `${ATTENDANCE_URL}?date=${encodeURIComponent(
-          date
-        )}`;
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `HTTP Error: ${response.status}`
-        );
+      // 1. Fetch attendance records for selected date
+      let attendanceItems = [];
+      try {
+        const url = `${ATTENDANCE_URL}?date=${encodeURIComponent(date)}`;
+        const response = await fetch(url, { method: 'GET', headers });
+        if (response.ok) {
+          const data = await response.json();
+          attendanceItems = normalizeLogs(data);
+        }
+      } catch (aErr) {
+        console.warn('Attendance logs fetch error:', aErr);
       }
 
-      const data =
-        await response.json();
+      // Map attendance items by User Mongo ID
+      const attendanceMap = new Map();
+      attendanceItems.forEach((item) => {
+        const uId =
+          item?.employee?._id ||
+          item?.user?._id ||
+          item?.userId?._id ||
+          item?.userId ||
+          item?._id;
+        if (uId) {
+          attendanceMap.set(String(uId), item);
+        }
+      });
 
-      console.log(
-        'DATE-WISE ATTENDANCE:',
-        data
-      );
+      // 2. Fetch all users from /users/all to guarantee HR, TL, Admin, Employee are all in table
+      try {
+        const usersUrl = 'https://kt-backend-1.onrender.com/api/users/all';
+        const usersRes = await fetch(usersUrl, { method: 'GET', headers });
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          const usersList = usersData.users || usersData.data || [];
+          usersList.forEach((user) => {
+            if (!user || !user._id) return;
+            const uIdKey = String(user._id);
+            if (!attendanceMap.has(uIdKey)) {
+              // Add fallback entry for user (e.g. HR, Admin, etc.)
+              attendanceMap.set(uIdKey, {
+                _id: user._id,
+                employee: {
+                  _id: user._id,
+                  name: user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || 'Unknown User',
+                  uniqueID: user.uniqueID || '',
+                  email: user.email || '',
+                  department: user.department || '',
+                  role: user.role || 'employee',
+                },
+                user: {
+                  _id: user._id,
+                  name: user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || 'Unknown User',
+                  uniqueID: user.uniqueID || '',
+                  email: user.email || '',
+                  department: user.department || '',
+                  role: user.role || 'employee',
+                },
+                date,
+                status: 'absent',
+                approvalStatus: 'not_checked_in',
+                checkInTime: null,
+                checkOutTime: null,
+                totalWorkTime: 0,
+                totalBreakTime: 0,
+                breaks: [],
+              });
+            }
+          });
+        }
+      } catch (uErr) {
+        console.warn('Users fetch error:', uErr);
+      }
 
-      const attendanceItems =
-        normalizeLogs(data);
+      // 3. Fetch adjustment history to merge any adjustments made for the selected date
+      try {
+        const historyUrl = 'https://kt-backend-1.onrender.com/api/adjustment/history';
+        const historyRes = await fetch(historyUrl, { method: 'GET', headers });
+        if (historyRes.ok) {
+          const historyData = await historyRes.json();
+          const historyList = historyData.data || historyData.adjustments || [];
+          
+          const getIstDateString = (dateVal) => {
+            if (!dateVal) return '';
+            const d = new Date(dateVal);
+            if (isNaN(d.getTime())) return String(dateVal).split('T')[0];
+            const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+            const year = istDate.getUTCFullYear();
+            const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(istDate.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          };
 
-      const mappedLogs =
-        attendanceItems.map(mapLog);
+          const getEmpNameFromVal = (val) => {
+            if (!val) return '';
+            return (
+              val?.employeeName ||
+              val?.name ||
+              val?.employee?.name ||
+              val?.user?.name ||
+              (typeof val?.userId === 'object' ? val?.userId?.name : '') ||
+              (typeof val?.employeeId === 'object' ? val?.employeeId?.name : '') ||
+              ''
+            ).trim().toLowerCase();
+          };
+
+          const findMatchingKey = (empId, empName) => {
+            const targetId = String(empId || '');
+            const targetName = String(empName || '').trim().toLowerCase();
+
+            for (const [key, val] of attendanceMap.entries()) {
+              if (targetId && String(key) === targetId) return key;
+              const valUser = val?.employee || val?.user || (typeof val?.userId === 'object' ? val?.userId : {}) || {};
+              const valId = valUser?._id || valUser?.id || val?._id || val?.userId;
+              if (targetId && valId && String(valId) === targetId) return key;
+              
+              const valName = getEmpNameFromVal(val);
+              if (targetName && valName && (targetName === valName || targetName.includes(valName) || valName.includes(targetName))) {
+                return key;
+              }
+            }
+            return targetId || null;
+          };
+
+          historyList.forEach((adj) => {
+            if (!adj) return;
+            // Only merge adjustments for the currently selected date!
+            const adjDateStr = getIstDateString(adj.date);
+            if (adjDateStr && adjDateStr !== date) {
+              return;
+            }
+
+            const empId = typeof adj.employeeId === 'object' ? (adj.employeeId?._id || adj.employeeId?.id) : adj.employeeId;
+            const empName = typeof adj.employeeId === 'object' ? adj.employeeId?.name : (adj.employeeName || '');
+            const uIdKey = findMatchingKey(empId, empName);
+            if (uIdKey) {
+              const existing = attendanceMap.get(uIdKey) || {};
+              const firstSess = Array.isArray(adj.sessions) && adj.sessions[0] ? adj.sessions[0] : {};
+              
+              let checkinVal = adj.checkInTime || firstSess.checkin || '';
+              let checkoutVal = adj.checkOutTime || firstSess.checkout || '';
+
+              if (checkinVal && typeof checkinVal === 'string' && /^\d{1,2}:\d{2}/.test(checkinVal)) {
+                const [h, m] = checkinVal.split(':').map(Number);
+                const d = new Date(date);
+                if (!isNaN(d.getTime())) {
+                  d.setHours(h, m, 0, 0);
+                  checkinVal = d.toISOString();
+                }
+              }
+
+              if (checkoutVal && typeof checkoutVal === 'string' && /^\d{1,2}:\d{2}/.test(checkoutVal)) {
+                const [h, m] = checkoutVal.split(':').map(Number);
+                const d = new Date(date);
+                if (!isNaN(d.getTime())) {
+                  d.setHours(h, m, 0, 0);
+                  checkoutVal = d.toISOString();
+                }
+              }
+
+              if (checkinVal) {
+                const adjStatus = String(adj.status || '').toLowerCase().trim();
+                attendanceMap.set(uIdKey, {
+                  ...existing,
+                  checkInTime: checkinVal,
+                  approvedCheckInTime: checkinVal,
+                  checkOutTime: checkoutVal || existing.checkOutTime || null,
+                  approvalStatus: 'approved',
+                  status: adjStatus || existing.status || 'absent',
+                  reason: adj.reason || existing.reason,
+                });
+              }
+            }
+          });
+        }
+      } catch (hErr) {
+        console.warn('Adjustment history fetch error:', hErr);
+      }
+
+      // 4. Merge local adjustments saved in localStorage (for missing backend records)
+      try {
+        const localAdjs = JSON.parse(localStorage.getItem("localAdjustments") || "[]");
+        const getEmpNameFromVal = (val) => {
+          if (!val) return '';
+          return (
+            val?.employeeName ||
+            val?.name ||
+            val?.employee?.name ||
+            val?.user?.name ||
+            (typeof val?.userId === 'object' ? val?.userId?.name : '') ||
+            (typeof val?.employeeId === 'object' ? val?.employeeId?.name : '') ||
+            ''
+          ).trim().toLowerCase();
+        };
+
+        const findMatchingKey = (empId, empName) => {
+          const targetId = String(empId || '');
+          const targetName = String(empName || '').trim().toLowerCase();
+
+          for (const [key, val] of attendanceMap.entries()) {
+            if (targetId && String(key) === targetId) return key;
+            const valUser = val?.employee || val?.user || (typeof val?.userId === 'object' ? val?.userId : {}) || {};
+            const valId = valUser?._id || valUser?.id || val?._id || val?.userId;
+            if (targetId && valId && String(valId) === targetId) return key;
+            
+            const valName = getEmpNameFromVal(val);
+            if (targetName && valName && (targetName === valName || targetName.includes(valName) || valName.includes(targetName))) {
+              return key;
+            }
+          }
+          return targetId || null;
+        };
+
+        localAdjs.slice().reverse().forEach((adj) => {
+          if (!adj || !adj.employeeId) return;
+          if (adj.date && adj.date !== date) return;
+
+          const uIdKey = findMatchingKey(adj.employeeId, adj.employeeName);
+          if (uIdKey) {
+            const existing = attendanceMap.get(uIdKey) || {};
+            const firstSess = Array.isArray(adj.sessions) && adj.sessions[0] ? adj.sessions[0] : {};
+            
+            let checkinVal = adj.checkInTime || firstSess.checkin || "";
+            let checkoutVal = adj.checkOutTime || firstSess.checkout || "";
+
+            if (checkinVal && typeof checkinVal === 'string' && /^\d{1,2}:\d{2}/.test(checkinVal)) {
+              const [h, m] = checkinVal.split(':').map(Number);
+              const d = new Date(date);
+              if (!isNaN(d.getTime())) {
+                d.setHours(h, m, 0, 0);
+                checkinVal = d.toISOString();
+              }
+            }
+
+            if (checkinVal) {
+              attendanceMap.set(uIdKey, {
+                ...existing,
+                checkInTime: checkinVal,
+                approvedCheckInTime: checkinVal,
+                checkOutTime: checkoutVal || existing.checkOutTime || null,
+                approvalStatus: 'approved',
+                status: adj.status || existing.status || 'present',
+                reason: adj.reason || existing.reason,
+              });
+            }
+          }
+        });
+      } catch (lErr) {
+        console.warn("Local adjustments merge error:", lErr);
+      }
+
+      const combinedLogs = Array.from(attendanceMap.values());
+      const mappedLogs = combinedLogs.map(mapLog);
 
       setLogs(mappedLogs);
     } catch (err) {
@@ -903,6 +1171,18 @@ export default function AttendanceLogs() {
   ========================================================= */
   useEffect(() => {
     fetchAttendanceLogs(selectedDate);
+
+    const handleAdjustmentUpdate = () => {
+      fetchAttendanceLogs(selectedDate);
+    };
+
+    window.addEventListener("attendanceAdjusted", handleAdjustmentUpdate);
+    window.addEventListener("storage", handleAdjustmentUpdate);
+
+    return () => {
+      window.removeEventListener("attendanceAdjusted", handleAdjustmentUpdate);
+      window.removeEventListener("storage", handleAdjustmentUpdate);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
@@ -1139,53 +1419,23 @@ export default function AttendanceLogs() {
      ATTENDANCE COUNTS
   ========================================================= */
   const getNormalizedStatus = (log) => {
-    return String(log?.status || '')
-      .trim()
-      .toLowerCase();
+    return normalizeStatus(log);
   };
 
   const onTimeCount = logs.filter(
-    (log) => {
-      const status =
-        getNormalizedStatus(log);
-
-      return (
-        status === 'present' ||
-        status === 'on time'
-      );
-    }
+    (log) => getNormalizedStatus(log) === 'on time'
   ).length;
 
   const lateCount = logs.filter(
-    (log) =>
-      getNormalizedStatus(log) ===
-      'late'
+    (log) => getNormalizedStatus(log) === 'late'
   ).length;
 
   const halfDayCount = logs.filter(
-    (log) => {
-      const status =
-        getNormalizedStatus(log);
-
-      return (
-        status === 'half day' ||
-        status === 'half-day' ||
-        status === 'halfday'
-      );
-    }
+    (log) => getNormalizedStatus(log) === 'half day'
   ).length;
 
   const absentCount = logs.filter(
-    (log) => {
-      const status =
-        getNormalizedStatus(log);
-
-      return (
-        status === 'absent' ||
-        status === 'on leave' ||
-        status === 'leave'
-      );
-    }
+    (log) => getNormalizedStatus(log) === 'absent'
   ).length;
 
   /* =========================================================
@@ -1429,23 +1679,29 @@ export default function AttendanceLogs() {
         <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 bg-gray-50 p-3 border-b border-gray-200">
 
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-blue-600" />
-            <span className="font-medium">
-              💼 Working
+            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 flex items-center justify-center text-white">
+              <Briefcase className="h-3 w-3" />
+            </div>
+            <span className="font-medium text-slate-700">
+              Working
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-yellow-300 to-yellow-500" />
-            <span className="font-medium">
-              ☕ Break
+            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-yellow-300 to-yellow-500 flex items-center justify-center text-white">
+              <Coffee className="h-3 w-3" />
+            </div>
+            <span className="font-medium text-slate-700">
+              Break
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-gray-300 to-gray-500" />
-            <span className="font-medium">
-              ⏸️ Idle
+            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-gray-300 to-gray-500 flex items-center justify-center text-white">
+              <PauseCircle className="h-3 w-3" />
+            </div>
+            <span className="font-medium text-slate-700">
+              Idle
             </span>
           </div>
         </div>
@@ -1927,11 +2183,15 @@ export default function AttendanceLogs() {
       </div>
 
       {selectedLog && (() => {
+        const activeLog = logs.find((l) => 
+          String(l.id) === String(selectedLog.id) ||
+          (l.name && selectedLog.name && String(l.name).trim().toLowerCase() === String(selectedLog.name).trim().toLowerCase())
+        ) || selectedLog;
         const {
           segments,
           workingMinutes, 
           breakMinutes,
-        } = getLogDetails(selectedLog);
+        } = getLogDetails(activeLog);
 
         return (
           <div
@@ -1948,15 +2208,15 @@ export default function AttendanceLogs() {
             >
               <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className={`h-10 w-10 ${selectedLog.avatarColor} flex flex-shrink-0 items-center justify-center text-sm font-bold text-white`}>
-                    {getInitials(selectedLog.name)}
+                  <div className={`h-10 w-10 ${activeLog.avatarColor} flex flex-shrink-0 items-center justify-center text-sm font-bold text-white`}>
+                    {getInitials(activeLog.name)}
                   </div>
                   <div className="min-w-0">
                     <h2 id="attendance-details-title" className="truncate text-lg font-bold text-gray-800">
-                      {selectedLog.name}
+                      {activeLog.name}
                     </h2>
                     <p className="truncate text-xs text-gray-500">
-                      {formatIndianDate(selectedLog.date)}
+                      {formatIndianDate(activeLog.date)}
                     </p>
                   </div>
                 </div>
@@ -1973,22 +2233,22 @@ export default function AttendanceLogs() {
 
               <div className="space-y-4 px-4 py-5 sm:px-6">
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`inline-flex items-center border px-2.5 py-1 text-xs font-semibold capitalize ${getStatusStyle(selectedLog.status)}`}>
-                    {selectedLog.status}
+                  <span className={`inline-flex items-center border px-2.5 py-1 text-xs font-semibold capitalize ${getStatusStyle(activeLog.status)}`}>
+                    {activeLog.status}
                   </span>
                   <span className="text-xs text-gray-500">
-                    Total: <strong className="text-gray-800">{selectedLog.totalHours}</strong>
+                    Total: <strong className="text-gray-800">{activeLog.totalHours}</strong>
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <div className="border border-emerald-200 bg-emerald-50 p-3">
                     <p className="text-[10px] font-semibold uppercase text-emerald-700">Check In</p>
-                    <p className="mt-1 text-sm font-bold text-emerald-800">{formatTime(selectedLog.checkIn)}</p>
+                    <p className="mt-1 text-sm font-bold text-emerald-800">{formatTime(activeLog.checkIn)}</p>
                   </div>
                   <div className="border border-rose-200 bg-rose-50 p-3">
                     <p className="text-[10px] font-semibold uppercase text-rose-700">Check Out</p>
-                    <p className="mt-1 text-sm font-bold text-rose-800">{formatTime(selectedLog.checkOut)}</p>
+                    <p className="mt-1 text-sm font-bold text-rose-800">{formatTime(activeLog.checkOut)}</p>
                   </div>
                   <div className="border border-blue-200 bg-blue-50 p-3">
                     <p className="text-[10px] font-semibold uppercase text-blue-700">Working</p>

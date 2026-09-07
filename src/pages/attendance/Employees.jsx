@@ -14,16 +14,24 @@ import {
   Crown,
   UserMinus,
   X,
+  User,
+  GraduationCap,
 } from "lucide-react";
 import { useConfirm } from "../../components/common/ConfirmDialog";
+
+const API_BASE =
+  process.env.REACT_APP_API_URL ||
+  "https://kt-backend-1.onrender.com/api";
 
 const initialFormData = {
   firstName: "",
   lastName: "",
   email: "",
   mobile: "",
+  gender: "",
   designation: "",
   department: "",
+  role: "employee",
   dob: "",
   address: "",
   bloodGroup: "",
@@ -176,12 +184,15 @@ export default function Employees() {
   // =========================
   // ROLE BADGE
   // =========================
-  const getRoleBadge = (isTeamLead) => {
-    if (isTeamLead) {
+  const getRoleBadge = (emp) => {
+    if (emp?.isTeamLead || emp?.role === "team lead") {
       return "bg-amber-50 text-amber-700 border-amber-200";
     }
+    if (emp?.role === "intern") {
+      return "bg-purple-50 text-purple-700 border-purple-200";
+    }
 
-    return "bg-gray-50 text-gray-600 border-gray-200";
+    return "bg-blue-50 text-blue-700 border-blue-200";
   };
 
   // =========================
@@ -205,6 +216,16 @@ export default function Employees() {
       return null;
     }
 
+    if (!payload.gender) {
+      alert("Gender is required");
+      return null;
+    }
+
+    if (!payload.designation) {
+      alert("Designation is required");
+      return null;
+    }
+
     return payload;
   };
 
@@ -224,7 +245,7 @@ export default function Employees() {
       const token = localStorage.getItem("token");
 
       const res = await fetch(
-        "https://kt-backend-1.onrender.com/api/employee/add",
+        `${API_BASE}/employee/add`,
         {
           method: "POST",
           headers: {
@@ -247,9 +268,9 @@ export default function Employees() {
       } else {
         alert(data.message || "Failed to add employee");
       }
-    } catch (error) {
-      console.error("Add employee error:", error);
-      alert("Failed to add employee");
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong");
     }
   };
 
@@ -271,12 +292,14 @@ export default function Employees() {
         employee.departmentName ||
         employee.department ||
         "",
+      role: employee.role || (employee.isTeamLead ? "team lead" : "employee"),
       dob: employee.dob
         ? String(employee.dob).split("T")[0]
         : employee.dateOfBirth
         ? String(employee.dateOfBirth).split("T")[0]
         : "",
       address: employee.address || employee.currentAddress || "",
+      gender: employee.gender || "",
       bloodGroup: employee.bloodGroup || "",
     });
 
@@ -656,16 +679,24 @@ export default function Employees() {
                           <td className="px-4 py-3">
                             <span
                               className={`inline-flex items-center px-2.5 py-1 text-xs font-medium border ${getRoleBadge(
-                                emp.isTeamLead
+                                emp
                               )}`}
                             >
-                              {emp.isTeamLead ? (
+                              {emp.isTeamLead || emp.role === "team lead" ? (
                                 <>
                                   <Crown className="h-3 w-3 mr-1 text-amber-600" />
                                   Team Lead
                                 </>
+                              ) : emp.role === "intern" ? (
+                                <>
+                                  <GraduationCap className="h-3 w-3 mr-1 text-purple-600" />
+                                  Intern
+                                </>
                               ) : (
-                                "Member"
+                                <>
+                                  <User className="h-3 w-3 mr-1 text-blue-600" />
+                                  Employee
+                                </>
                               )}
                             </span>
                           </td>
@@ -1149,8 +1180,8 @@ export default function Employees() {
                 />
               </div>
 
-              {/* DESIGNATION */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* DESIGNATION, DEPARTMENT & ROLE */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Designation *
@@ -1158,7 +1189,7 @@ export default function Employees() {
 
                   <input
                     name="designation"
-                    placeholder="e.g. Software Engineer"
+                    placeholder="e.g. Software Engineer, UI Intern"
                     value={formData.designation}
                     onChange={handleChange}
                     required
@@ -1180,6 +1211,24 @@ export default function Employees() {
                     required
                     className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Role *
+                  </label>
+
+                  <select
+                    name="role"
+                    value={formData.role || "employee"}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg bg-white"
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="intern">Intern</option>
+                    <option value="team lead">Team Lead</option>
+                  </select>
                 </div>
               </div>
 
@@ -1225,6 +1274,27 @@ export default function Employees() {
                     ].map((bloodGroup) => (
                       <option key={bloodGroup} value={bloodGroup}>
                         {bloodGroup}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Gender *
+                  </label>
+
+                  <select
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2.5 border border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                  >
+                    <option value="">Select gender</option>
+                    {["Male", "Female", "Other"].map((gender) => (
+                      <option key={gender} value={gender}>
+                        {gender}
                       </option>
                     ))}
                   </select>

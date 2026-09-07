@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../components/common/ConfirmDialog";
+import { FileText, Edit3, ClipboardList, CheckCircle, XCircle } from "lucide-react";
 
 const Performance = () => {
   const { confirm, confirmationDialog } = useConfirm();
@@ -770,7 +771,10 @@ const Performance = () => {
       <div className="mt-8 sm:mt-12 border-t pt-6 sm:pt-8">
 
         <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">
-          📋 Performance History
+          <span className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-indigo-600" />
+            Performance History
+          </span>
         </h3>
 
         {/* ======================================================
@@ -1052,8 +1056,9 @@ const Performance = () => {
 
                   <div className="border border-blue-200 rounded-lg p-3 sm:p-4 mb-4">
 
-                    <p className="text-blue-800 font-medium text-sm sm:text-base">
-                      ✏️ Editing Performance
+                    <p className="text-blue-800 font-medium text-sm sm:text-base flex items-center gap-2">
+                      <Edit3 className="h-4 w-4 text-blue-600" />
+                      Editing Performance
                     </p>
 
                     <p className="text-blue-600 text-xs sm:text-sm">
@@ -1072,8 +1077,9 @@ const Performance = () => {
 
                   </div>
 
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    📝 Edit Remarks
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-indigo-600" />
+                    Edit Remarks
                   </label>
 
                   <textarea
@@ -1095,9 +1101,13 @@ const Performance = () => {
                       disabled={submitting}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 text-sm sm:text-base"
                     >
-                      {submitting
-                        ? "Updating..."
-                        : "✅ Update Performance"}
+                      {submitting ? (
+                        "Updating..."
+                      ) : (
+                        <span className="flex items-center justify-center gap-2">
+                          <CheckCircle className="h-4 w-4" /> Update Performance
+                        </span>
+                      )}
                     </button>
 
                     <button
@@ -1105,7 +1115,9 @@ const Performance = () => {
                       disabled={submitting}
                       className="px-4 sm:px-6 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-semibold py-2.5 sm:py-3 rounded-xl transition duration-200 text-sm sm:text-base"
                     >
-                      ❌ Cancel
+                      <span className="flex items-center justify-center gap-2">
+                        <XCircle className="h-4 w-4 text-gray-500" /> Cancel
+                      </span>
                     </button>
 
                   </div>
@@ -1264,8 +1276,9 @@ const Performance = () => {
 
                       <div>
 
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          📝 Remarks
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-indigo-600" />
+                          Remarks
                         </label>
 
                         <textarea

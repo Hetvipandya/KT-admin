@@ -397,6 +397,18 @@ const EmployeeRequests = () => {
                             <span className="text-slate-600 truncate">Blood: {user.bloodGroup}</span>
                           </div>
                         )}
+                        {user?.gender && (
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-sm">
+                            <User className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400 flex-shrink-0" />
+                            <span className="text-slate-600 truncate">Gender: {user.gender}</span>
+                          </div>
+                        )}
+                        {user?.designation && (
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-sm">
+                            <Briefcase className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400 flex-shrink-0" />
+                            <span className="text-slate-600 truncate">Designation: {user.designation}</span>
+                          </div>
+                        )}
                         {user?.uniqueID && (
                           <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-sm">
                             <Hash className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400 flex-shrink-0" />
@@ -513,6 +525,7 @@ const EmployeeRequests = () => {
                   {[
                     { icon: Phone, label: 'Phone', value: selectedUser?.phoneNumber || selectedUser?.phone },
                     { icon: Calendar, label: 'Date of Birth', value: selectedUser?.dob },
+                    { icon: User, label: 'Gender', value: selectedUser?.gender },
                     { icon: Droplet, label: 'Blood Group', value: selectedUser?.bloodGroup }
                   ].map((item, idx) => (
                     item.value && (
@@ -537,6 +550,7 @@ const EmployeeRequests = () => {
                 <div className="mt-2 sm:mt-3 space-y-2 sm:space-y-3">
                   {[
                     { icon: Building, label: 'Department', value: selectedUser?.department },
+                    { icon: Briefcase, label: 'Designation', value: selectedUser?.designation },
                     { icon: Briefcase, label: 'Role', value: selectedUser?.role },
                     { icon: Hash, label: 'Unique ID', value: selectedUser?.uniqueID }
                   ].map((item, idx) => (

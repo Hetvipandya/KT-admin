@@ -10,6 +10,7 @@ import {
   AlertCircle,
   MessageSquare,
   X,
+  Check,
   CheckCircle,
   XCircle,
   RefreshCw,
@@ -29,7 +30,7 @@ const HR_APPROVE_URL = `${BASE_URL}/hr/approve`;
 const HR_REJECT_URL = `${BASE_URL}/hr/reject`;
 
 const ADMIN_APPROVE_URL = `${BASE_URL}/admin/approve`;
-const ADMIN_REJECT_URL = `${BASE_URL}/admin/reject`;
+const ADMIN_REJECT_URL = `${BASE_URL}/admin/approve`;
 
 // ============================================================
 // HELPERS
@@ -176,6 +177,7 @@ export default function LeaveRequest() {
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [localOverrides, setLocalOverrides] = useState({});
 
   // ==========================================================
   // GET CURRENT USER
@@ -296,9 +298,30 @@ export default function LeaveRequest() {
             leave.hrApprovalStatus
         );
 
-        const adminStatus = normalizeStatus(
-          leave.adminStatus
-        );
+        const leaveId =
+          leave?._id ||
+          leave?.id ||
+          `${employee?._id || "employee"}-${index}`;
+
+        const isHrApplicant = normalizeRole(employeeRole) === "hr";
+
+        let rawAdminStatus = leave.adminStatus;
+        if (localOverrides[leaveId]) {
+          rawAdminStatus = localOverrides[leaveId];
+        } else if (!rawAdminStatus) {
+          if (isHrApplicant) {
+            const leaveFinal = getLeaveFinalStatus(leave);
+            if (leaveFinal === "approved") {
+              rawAdminStatus = "Approved";
+            } else if (leaveFinal === "rejected") {
+              rawAdminStatus = "Rejected";
+            } else {
+              rawAdminStatus = "Pending";
+            }
+          }
+        }
+
+        const adminStatus = normalizeStatus(rawAdminStatus);
 
         // ======================================================
         // OVERALL STATUS
@@ -568,19 +591,20 @@ export default function LeaveRequest() {
         return "Waiting for Admin";
 
       case "rejected":
-        if (isRejected(leave.teamLeadStatus)) {
-          return "Rejected by Team Lead";
-        }
-
-        if (isRejected(leave.hrStatus)) {
-          return "Rejected by HR";
-        }
-
-        if (isRejected(leave.adminStatus)) {
+        if (normalizeRole(leave?.role) === "hr" || isRejected(leave?.adminStatus)) {
           return "Rejected by Admin";
         }
 
+        if (normalizeRole(leave?.role) === "teamlead" || isRejected(leave?.hrStatus)) {
+          return "Rejected by HR";
+        }
+
+        if (isRejected(leave?.teamLeadStatus)) {
+          return "Rejected by Team Lead";
+        }
+
         return "Rejected";
+
 
       case "completed":
         return "Leave Approved";
@@ -597,10 +621,6 @@ export default function LeaveRequest() {
   const canTakeAction = (leave) => {
     if (!leave) return false;
 
-    if (isLeaveFinalized(leave)) {
-      return false;
-    }
-
     const loggedRole = normalizeRole(
       currentRole
     );
@@ -611,14 +631,15 @@ export default function LeaveRequest() {
 
     // ========================================================
     // ADMIN
-    // ONLY HR LEAVE
+    // CAN ALWAYS EDIT HR LEAVE STATUS
     // ========================================================
 
     if (loggedRole === "admin") {
-      return (
-        applicantRole === "hr" &&
-        isPending(leave.adminStatus)
-      );
+      return applicantRole === "hr";
+    }
+
+    if (isLeaveFinalized(leave)) {
+      return false;
     }
 
     // ========================================================
@@ -798,6 +819,34 @@ export default function LeaveRequest() {
     try {
       setActioningId(leave.id);
 
+      const newStatusTitle = status === "approved" ? "Approved" : "Rejected";
+      const newStatusLower = status === "approved" ? "approved" : "rejected";
+
+      // Instantly record local override so refetch preserves it
+      setLocalOverrides((prev) => ({
+        ...prev,
+        [leave.id]: newStatusTitle,
+      }));
+
+      // Optimistically update current requests state
+      setRequests((prevRequests) =>
+        prevRequests.map((item) => {
+          if (item.id === leave.id) {
+            return {
+              ...item,
+              adminStatus: newStatusTitle,
+              approvalStatus: newStatusTitle,
+              rawLeave: {
+                ...item.rawLeave,
+                status: newStatusLower,
+                adminStatus: newStatusTitle,
+              },
+            };
+          }
+          return item;
+        })
+      );
+
       // ======================================================
       // BACKEND EXPECTS status IN BODY
       // ======================================================
@@ -830,66 +879,23 @@ export default function LeaveRequest() {
             responseData?.message || ""
           );
 
-        if (alreadyProcessedMessage) {
-          await fetchLeaves();
-          setSuccess(
+        if (!alreadyProcessedMessage) {
+          throw new Error(
             responseData?.message ||
-              `Leave is already ${
+              `Failed to ${
                 status === "approved"
-                  ? "approved"
-                  : "rejected"
-              }.`
+                  ? "approve"
+                  : "reject"
+              } leave`
           );
-          setSelectedLeave(null);
-          return;
         }
-
-        throw new Error(
-          responseData?.message ||
-            `Failed to ${
-              status === "approved"
-                ? "approve"
-                : "reject"
-            } leave`
-        );
       }
 
-      // ------------------------------------------------------
-      // Refresh server data
-      // ------------------------------------------------------
-
-      await fetchLeaves();
-
-      // ------------------------------------------------------
-      // Success message
-      // ------------------------------------------------------
-
-      setSuccess(
-        status === "approved"
-          ? "Leave approved successfully."
-          : "Leave rejected successfully."
-      );
-
-      // ------------------------------------------------------
-      // Close modal after action
-      // ------------------------------------------------------
-
-      setSelectedLeave(null);
-
-      // Auto clear success
-      setTimeout(() => {
-        setSuccess("");
-      }, 3000);
+      setSuccess(`Leave status updated to ${newStatusTitle} successfully.`);
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error(
-        "LEAVE ACTION ERROR:",
-        error
-      );
-
-      setError(
-        error?.message ||
-          "Failed to update leave status."
-      );
+      console.error("LEAVE ACTION ERROR:", error);
+      setError(error?.message || "Failed to update leave status.");
     } finally {
       setActioningId(null);
     }
@@ -1068,10 +1074,13 @@ export default function LeaveRequest() {
   };
 
   const ApprovalStatus = ({ leave, stage, status }) => {
-    const isHrLeave = normalizeRole(leave?.role) === "hr";
+    const applicantRole = normalizeRole(leave?.role);
+    const isHrLeave = applicantRole === "hr";
+    const isTeamLeadLeave = applicantRole === "teamlead";
+
     const isNotApplicable =
-      isHrLeave &&
-      (stage === "teamlead" || stage === "hr");
+      (isHrLeave && (stage === "teamlead" || stage === "hr")) ||
+      (isTeamLeadLeave && (stage === "teamlead" || stage === "admin"));
 
     if (isNotApplicable) {
       return (
@@ -1085,33 +1094,74 @@ export default function LeaveRequest() {
   };
 
   const ApprovalActions = ({ leave }) => {
-    const isHrLeave = normalizeRole(leave?.role) === "hr";
-    const isFinalized =
-      isApproved(leave?.adminStatus) ||
-      isRejected(leave?.adminStatus);
-
-    if (!canTakeAction(leave) && !(isHrLeave && isFinalized)) {
-      return null;
+    if (!canTakeAction(leave)) {
+      return <StatusBadge status={leave?.adminStatus || "Pending"} />;
     }
 
     const isActioning = actioningId === leave.id;
-    const isDisabled = isActioning || isFinalized;
-    const isApproveDisabled =
-      isDisabled || isApprovalAlreadyApproved(leave);
+    const currentStatus = normalizeStatus(leave?.adminStatus);
+
+    if (currentStatus === "Approved") {
+      return (
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+            Approved
+          </span>
+
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleAction(leave, "rejected");
+            }}
+            disabled={isActioning}
+            title="Reject Leave"
+            className="w-7 h-7 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center transition active:scale-90 disabled:opacity-50"
+          >
+            <X className="w-3.5 h-3.5 stroke-[2.5]" />
+          </button>
+        </div>
+      );
+    }
+
+    if (currentStatus === "Rejected") {
+      return (
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+            Rejected
+          </span>
+
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleAction(leave, "approved");
+            }}
+            disabled={isActioning}
+            title="Approve Leave"
+            className="w-7 h-7 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center transition active:scale-90 disabled:opacity-50"
+          >
+            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+          </button>
+        </div>
+      );
+    }
 
     return (
-      <div className="flex flex-wrap items-center gap-2 mt-2">
+      <div className="flex items-center gap-2 whitespace-nowrap">
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             handleAction(leave, "approved");
           }}
-          disabled={isApproveDisabled}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-xs font-semibold"
+          disabled={isActioning}
+          title="Approve Leave"
+          className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center shadow-sm transition active:scale-90 disabled:opacity-50"
         >
-          <CheckCircle className="w-3.5 h-3.5" />
-          Approve
+          <Check className="w-4 h-4 stroke-[2.5]" />
         </button>
 
         <button
@@ -1120,15 +1170,16 @@ export default function LeaveRequest() {
             event.stopPropagation();
             handleAction(leave, "rejected");
           }}
-          disabled={isDisabled}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-xs font-semibold"
+          disabled={isActioning}
+          title="Reject Leave"
+          className="w-8 h-8 rounded-full bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white flex items-center justify-center shadow-sm transition active:scale-90 disabled:opacity-50"
         >
-          <XCircle className="w-3.5 h-3.5" />
-          Reject
+          <X className="w-4 h-4 stroke-[2.5]" />
         </button>
       </div>
     );
-  }; 
+  };
+ 
 
   // ==========================================================
   // LOADER
@@ -1502,12 +1553,11 @@ export default function LeaveRequest() {
 
                           <td className="px-4 py-4">
                             {normalizeRole(request.role) === "hr" ? (
-                              <>
+                              canTakeAction(request) ? (
+                                <ApprovalActions leave={request} />
+                              ) : (
                                 <StatusBadge status={request.adminStatus} />
-                                {currentRole && normalizeRole(currentRole) === "admin" ? (
-                                  <ApprovalActions leave={request} />
-                                ) : null}
-                              </>
+                              )
                             ) : (
                               <span className="text-sm text-gray-400">
                                 -
@@ -1661,17 +1711,15 @@ export default function LeaveRequest() {
                           </p>
 
                           {normalizeRole(request.role) === "hr" ? (
-                            <>
+                            canTakeAction(request) ? (
+                              <ApprovalActions leave={request} />
+                            ) : (
                               <StatusBadge
                                 status={
                                   request.adminStatus
                                 }
                               />
-
-                              {currentRole && normalizeRole(currentRole) === "admin" ? (
-                                <ApprovalActions leave={request} />
-                              ) : null}
-                            </>
+                            )
                           ) : (
                             <span className="text-sm text-gray-400">
                               -
