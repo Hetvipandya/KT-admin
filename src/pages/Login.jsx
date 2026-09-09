@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Lock, Mail, ShieldCheck } from "lucide-react";
 import Button from "../components/common/Button";
 import Input from "../components/common/Input";
@@ -80,15 +80,25 @@ function Login({ setIsAuthenticated }) {
             required
           />
 
-          <Input
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            leftIcon={Lock}
-            required
-          />
+          <div>
+            <Input
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              leftIcon={Lock}
+              required
+            />
+            <div className="flex justify-end mt-1.5">
+              <Link
+                to="/forgot-password"
+                className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
+              >
+                Forgot Password?
+              </Link>
+            </div>
+          </div>
 
           {error && (
             <div className="p-2 rounded-lg bg-rose-50 border border-rose-200/60 text-xs font-medium text-rose-600 text-center">

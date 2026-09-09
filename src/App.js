@@ -22,6 +22,8 @@ const Setting = lazy(() => import("./pages/Setting"));
 const Logout = lazy(() => import("./pages/Logout"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Login = lazy(() => import("./pages/Login"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const EmployeeRequests = lazy(() => import("./pages/EmployeeRequests"));
 const Performance = lazy(() => import("./pages/Performance"));
 const TeamLead = lazy(() => import("./pages/TeamLead").then((module) => ({ default: module.TeamLead })));
@@ -84,6 +86,8 @@ function AppShell() {
         <Routes>
           <Route path="/" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
           <Route path="/login" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>
