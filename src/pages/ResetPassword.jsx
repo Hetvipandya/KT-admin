@@ -135,7 +135,7 @@ function ResetPassword() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-2.5 top-7 text-slate-400 hover:text-slate-600"
               >
-                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {showPassword ? <Eye className="w-3.5 h-3.5 text-indigo-600" /> : <EyeOff className="w-3.5 h-3.5" />}
               </button>
             </div>
 
@@ -156,7 +156,7 @@ function ResetPassword() {
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 className="absolute right-2.5 top-7 text-slate-400 hover:text-slate-600"
               >
-                {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {showConfirmPassword ? <Eye className="w-3.5 h-3.5 text-indigo-600" /> : <EyeOff className="w-3.5 h-3.5" />}
               </button>
             </div>
 

@@ -925,7 +925,7 @@ export default function AttendanceLogs() {
         }
       });
 
-      // 2. Fetch all users from /users/all to guarantee HR, TL, Admin, Employee are all in table
+      // 2. Fetch all users from /users/all to guarantee HR, TL, Employee are all in table (Excluding Admin)
       try {
         const usersUrl = 'https://kt-backend-1.onrender.com/api/users/all';
         const usersRes = await fetch(usersUrl, { method: 'GET', headers });
@@ -934,9 +934,12 @@ export default function AttendanceLogs() {
           const usersList = usersData.users || usersData.data || [];
           usersList.forEach((user) => {
             if (!user || !user._id) return;
+            const userRole = String(user.role || '').toLowerCase().trim();
+            if (userRole === 'admin') return; // Exclude Admin
+
             const uIdKey = String(user._id);
             if (!attendanceMap.has(uIdKey)) {
-              // Add fallback entry for user (e.g. HR, Admin, etc.)
+              // Add fallback entry for user
               attendanceMap.set(uIdKey, {
                 _id: user._id,
                 employee: {
@@ -1018,24 +1021,37 @@ export default function AttendanceLogs() {
                 return key;
               }
             }
-            return targetId || null;
+            return null;
           };
 
           historyList.forEach((adj) => {
-            if (!adj) return;
-            // Only merge adjustments for the currently selected date!
             const adjDateStr = getIstDateString(adj.date);
-            if (adjDateStr && adjDateStr !== date) {
-              return;
-            }
+            if (adjDateStr === date) {
+              const matchedKey = findMatchingKey(adj.employeeId, adj.employeeName);
+              const uIdKey = matchedKey || String(adj.employeeId);
+              const existing = attendanceMap.get(uIdKey) || {
+                _id: adj.employeeId,
+                employee: {
+                  _id: adj.employeeId,
+                  name: adj.employeeName || 'Unknown Employee',
+                  uniqueID: adj.uniqueID || '',
+                  email: adj.email || '',
+                  role: adj.role || 'employee',
+                },
+                user: {
+                  _id: adj.employeeId,
+                  name: adj.employeeName || 'Unknown Employee',
+                  uniqueID: adj.uniqueID || '',
+                  email: adj.email || '',
+                  role: adj.role || 'employee',
+                },
+                date,
+                totalWorkTime: 0,
+                totalBreakTime: 0,
+                breaks: [],
+              };
 
-            const empId = typeof adj.employeeId === 'object' ? (adj.employeeId?._id || adj.employeeId?.id) : adj.employeeId;
-            const empName = typeof adj.employeeId === 'object' ? adj.employeeId?.name : (adj.employeeName || '');
-            const uIdKey = findMatchingKey(empId, empName);
-            if (uIdKey) {
-              const existing = attendanceMap.get(uIdKey) || {};
               const firstSess = Array.isArray(adj.sessions) && adj.sessions[0] ? adj.sessions[0] : {};
-              
               let checkinVal = adj.checkInTime || firstSess.checkin || '';
               let checkoutVal = adj.checkOutTime || firstSess.checkout || '';
 
@@ -1078,45 +1094,32 @@ export default function AttendanceLogs() {
 
       // 4. Merge local adjustments saved in localStorage (for missing backend records)
       try {
-        const localAdjs = JSON.parse(localStorage.getItem("localAdjustments") || "[]");
-        const getEmpNameFromVal = (val) => {
-          if (!val) return '';
-          return (
-            val?.employeeName ||
-            val?.name ||
-            val?.employee?.name ||
-            val?.user?.name ||
-            (typeof val?.userId === 'object' ? val?.userId?.name : '') ||
-            (typeof val?.employeeId === 'object' ? val?.employeeId?.name : '') ||
-            ''
-          ).trim().toLowerCase();
-        };
+        const localAdjustments = JSON.parse(localStorage.getItem("attendance_adjustments") || "[]");
+        localAdjustments.forEach((adj) => {
+          if (adj.date === date && adj.employeeId) {
+            const uIdKey = String(adj.employeeId);
+            const existing = attendanceMap.get(uIdKey) || {
+              _id: adj.employeeId,
+              employee: {
+                _id: adj.employeeId,
+                name: adj.employeeName || "Unknown Employee",
+                uniqueID: adj.uniqueID || "",
+                email: adj.email || "",
+                role: adj.role || "employee",
+              },
+              user: {
+                _id: adj.employeeId,
+                name: adj.employeeName || "Unknown Employee",
+                uniqueID: adj.uniqueID || "",
+                email: adj.email || "",
+                role: adj.role || "employee",
+              },
+              date,
+              totalWorkTime: 0,
+              totalBreakTime: 0,
+              breaks: [],
+            };
 
-        const findMatchingKey = (empId, empName) => {
-          const targetId = String(empId || '');
-          const targetName = String(empName || '').trim().toLowerCase();
-
-          for (const [key, val] of attendanceMap.entries()) {
-            if (targetId && String(key) === targetId) return key;
-            const valUser = val?.employee || val?.user || (typeof val?.userId === 'object' ? val?.userId : {}) || {};
-            const valId = valUser?._id || valUser?.id || val?._id || val?.userId;
-            if (targetId && valId && String(valId) === targetId) return key;
-            
-            const valName = getEmpNameFromVal(val);
-            if (targetName && valName && (targetName === valName || targetName.includes(valName) || valName.includes(targetName))) {
-              return key;
-            }
-          }
-          return targetId || null;
-        };
-
-        localAdjs.slice().reverse().forEach((adj) => {
-          if (!adj || !adj.employeeId) return;
-          if (adj.date && adj.date !== date) return;
-
-          const uIdKey = findMatchingKey(adj.employeeId, adj.employeeName);
-          if (uIdKey) {
-            const existing = attendanceMap.get(uIdKey) || {};
             const firstSess = Array.isArray(adj.sessions) && adj.sessions[0] ? adj.sessions[0] : {};
             
             let checkinVal = adj.checkInTime || firstSess.checkin || "";
@@ -1148,7 +1151,20 @@ export default function AttendanceLogs() {
         console.warn("Local adjustments merge error:", lErr);
       }
 
-      const combinedLogs = Array.from(attendanceMap.values());
+      // Filter out admin users from attendance logs list
+      const combinedLogs = Array.from(attendanceMap.values()).filter((item) => {
+        const userRole = String(
+          item?.user?.role ||
+          item?.employee?.role ||
+          item?.userId?.role ||
+          item?.userType ||
+          item?.role ||
+          ''
+        ).toLowerCase().trim();
+
+        return userRole !== 'admin';
+      });
+
       const mappedLogs = combinedLogs.map(mapLog);
 
       setLogs(mappedLogs);

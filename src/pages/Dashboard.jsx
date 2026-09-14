@@ -63,6 +63,7 @@
     const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
     const [selectedLeave, setSelectedLeave] = useState(null);
     const [selectedStatus, setSelectedStatus] = useState("");
+    const [leaveRemark, setLeaveRemark] = useState("");
     const [upcomingHolidays, setUpcomingHolidays] = useState([]);
     const [birthdays, setBirthdays] = useState([]);
     const [absentRecords, setAbsentRecords] = useState([]);
@@ -683,16 +684,16 @@ async function fetchHolidays() {
     };
 
 
-    const updateLeaveStatus = async (leaveId, status) => {
+    const updateLeaveStatus = async (leaveId, status, remark = "") => {
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch("https://kt-backend-1.onrender.com/api/leave/admin-approval", {
+        const response = await fetch("https://kt-backend-1.onrender.com/api/leave/admin/approve", {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ leaveId, status }),
+          body: JSON.stringify({ leaveId, status, remark, description: remark }),
         });
         const data = await response.json();
         if (data.success) fetchLeaves();
@@ -702,8 +703,9 @@ async function fetchHolidays() {
     };
 
     const confirmAction = async () => {
-      await updateLeaveStatus(selectedLeave, selectedStatus);
+      await updateLeaveStatus(selectedLeave, selectedStatus, leaveRemark);
       setShowModal(false);
+      setLeaveRemark("");
     };
 
     const handleAnnouncementSubmit = async () => {
@@ -1576,32 +1578,48 @@ async function fetchHolidays() {
         {/* Confirmation Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white w-full max-w-xs rounded-xl p-4 text-center shadow-xl border border-slate-200/90">
+            <div className="bg-white w-full max-w-sm rounded-xl p-5 text-center shadow-xl border border-slate-200/90">
               <div
-                className={`mx-auto h-8 w-8 rounded-full flex items-center justify-center mb-3 ${
+                className={`mx-auto h-9 w-9 rounded-full flex items-center justify-center mb-3 ${
                   selectedStatus === "approved" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                 }`}
               >
-                <AlertCircle className="h-4 w-4" />
+                <AlertCircle className="h-5 w-5" />
               </div>
 
-              <h3 className="text-xs font-semibold text-slate-900">Confirm Decision</h3>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <h3 className="text-sm font-semibold text-slate-900">Confirm Decision</h3>
+              <p className="text-xs text-slate-500 mt-1">
                 Set leave status to <span className="font-semibold text-slate-800 uppercase">{selectedStatus}</span>?
               </p>
+
+              <div className="mt-3 text-left">
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                  Description / Remark {selectedStatus === "rejected" ? "(Reason)" : "(Optional)"}
+                </label>
+                <textarea
+                  rows={2}
+                  value={leaveRemark}
+                  onChange={(e) => setLeaveRemark(e.target.value)}
+                  placeholder="Enter description or remark..."
+                  className="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                />
+              </div>
 
               <div className="flex gap-2 mt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 border border-slate-200 bg-white py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                  onClick={() => {
+                    setShowModal(false);
+                    setLeaveRemark("");
+                  }}
+                  className="flex-1 border border-slate-200 bg-white py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={confirmAction}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium text-white transition-colors shadow-xs ${
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium text-white transition-colors shadow-xs ${
                     selectedStatus === "approved" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
                   }`}
                 >

@@ -4,7 +4,7 @@ import axios from "axios";
 const BASE_URL = "https://kt-backend-1.onrender.com/api";
 
 // Modal Component for Assignments
-const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, departmentName }) => {
+const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], onSave, departmentName }) => {
   const [selectedInterns, setSelectedInterns] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -16,6 +16,82 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, de
       setSelectedEmployees(lead.assignedEmployees || []);
     }
   }, [lead, isOpen]);
+
+  // Helper to check if a person matches the current Team Lead
+  const isCurrentLead = (person) => {
+    if (!person || !lead) return false;
+
+    const leadIds = [
+      lead._id,
+      lead.id,
+      lead.teamLeadId,
+      lead.userId,
+      lead.employeeId,
+      lead.teamLead?._id,
+      lead.teamLead?.userId,
+      lead.teamLead?.employeeId,
+      lead.user?._id,
+    ].filter(Boolean).map(x => String(x).toLowerCase().trim());
+
+    const personIds = [
+      person._id,
+      person.id,
+      person.userId,
+      person.userID,
+      person.employeeId,
+      person.employeeID,
+    ].filter(Boolean).map(x => String(x).toLowerCase().trim());
+
+    const leadEmails = [
+      lead.email,
+      lead.teamLead?.email,
+      lead.user?.email,
+    ].filter(Boolean).map(x => String(x).toLowerCase().trim());
+
+    const personEmails = [
+      person.email,
+      person.user?.email,
+    ].filter(Boolean).map(x => String(x).toLowerCase().trim());
+
+    const leadNames = [
+      lead.name,
+      lead.fullName,
+      lead.firstName ? `${lead.firstName} ${lead.lastName || ''}`.trim() : null,
+      lead.teamLead?.name,
+      lead.teamLead?.firstName ? `${lead.teamLead.firstName} ${lead.teamLead.lastName || ''}`.trim() : null,
+      lead.user?.name,
+    ].filter(Boolean).map(x => String(x).toLowerCase().replace(/\s+/g, ' ').trim());
+
+    const personNames = [
+      person.name,
+      person.fullName,
+      person.firstName ? `${person.firstName} ${person.lastName || ''}`.trim() : null,
+      person.user?.name,
+    ].filter(Boolean).map(x => String(x).toLowerCase().replace(/\s+/g, ' ').trim());
+
+    const idMatch = personIds.some(id => leadIds.includes(id));
+    const emailMatch = personEmails.length > 0 && leadEmails.length > 0 && personEmails.some(e => leadEmails.includes(e));
+    const nameMatch = personNames.length > 0 && leadNames.length > 0 && personNames.some(n => leadNames.includes(n));
+
+    return idMatch || emailMatch || nameMatch;
+  };
+
+  // 1. Available Interns: Only interns & NOT the current team lead
+  const availableInterns = (interns || []).filter((intern) => {
+    if (isCurrentLead(intern)) return false;
+    const role = (intern.role || intern.designation || '').toLowerCase().trim();
+    return role.includes('intern') || intern.isIntern === true || !role.includes('lead');
+  });
+
+  // 2. Available Employees: Purely employees (NOT intern, NOT team lead, NOT admin, NOT current lead)
+  const availableEmployees = (employees || []).filter((emp) => {
+    if (isCurrentLead(emp)) return false;
+    const role = (emp.role || emp.designation || '').toLowerCase().trim();
+    const isIntern = role.includes('intern') || emp.isIntern === true;
+    const isTeamLead = role.includes('lead') || emp.isTeamLead === true;
+    const isAdmin = role.includes('admin');
+    return !isIntern && !isTeamLead && !isAdmin;
+  });
 
   const handleInternToggle = (internId) => {
     setSelectedInterns(prev => 
@@ -55,9 +131,9 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, de
 
   const selectAll = (type) => {
     if (type === 'interns') {
-      setSelectedInterns(interns.map(intern => intern._id));
+      setSelectedInterns(availableInterns.map(intern => intern._id));
     } else {
-      setSelectedEmployees(employees.map(emp => emp._id));
+      setSelectedEmployees(availableEmployees.map(emp => emp._id));
     }
   };
 
@@ -162,7 +238,7 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, de
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-sm text-gray-500">
-                    {interns.length} interns available
+                    {availableInterns.length} interns available
                   </span>
                   <div className="space-x-2">
                     <button
@@ -181,12 +257,12 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, de
                 </div>
 
                 <div className="max-h-60 overflow-y-auto space-y-1">
-                  {interns.length === 0 ? (
+                  {availableInterns.length === 0 ? (
                     <p className="text-center text-gray-500 py-8">
                       No interns available
                     </p>
                   ) : (
-                    interns.map((intern) => (
+                    availableInterns.map((intern) => (
                       <label
                         key={intern._id}
                         className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200"
@@ -221,7 +297,7 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, de
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-sm text-gray-500">
-                    {employees.length} employees available
+                    {availableEmployees.length} employees available
                   </span>
                   <div className="space-x-2">
                     <button
@@ -240,12 +316,12 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns, employees, onSave, de
                 </div>
 
                 <div className="max-h-60 overflow-y-auto space-y-1">
-                  {employees.length === 0 ? (
+                  {availableEmployees.length === 0 ? (
                     <p className="text-center text-gray-500 py-8">
                       No employees available
                     </p>
                   ) : (
-                    employees.map((employee) => (
+                    availableEmployees.map((employee) => (
                       <label
                         key={employee._id}
                         className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200"

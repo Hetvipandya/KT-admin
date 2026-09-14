@@ -2241,7 +2241,7 @@ export default function Adjustments() {
               employeeMap.set(String(user._id), {
                 id: user._id,
                 name: name,
-                employeeId: user.uniqueID || "",
+                employeeId: user.uniqueID || user.employeeID || user.employeeId || "",
                 roleType: user.role || "employee",
               });
             });
@@ -2270,13 +2270,22 @@ export default function Adjustments() {
                 `${emp.firstName || ""} ${emp.lastName || ""}`.trim() ||
                 emp.name;
 
+              const resolvedRole =
+                emp.role ||
+                (emp.isTeamLead
+                  ? "team lead"
+                  : emp.designation || existing.roleType || "employee");
+
               employeeMap.set(userIdKey, {
                 id: emp.userID || emp._id,
                 name: empName || existing.name || "Unknown Employee",
-                employeeId: emp.employeeID || existing.employeeId || "",
-                roleType: emp.isTeamLead
-                  ? "team lead"
-                  : emp.designation || existing.roleType || "employee",
+                employeeId:
+                  emp.uniqueID ||
+                  emp.employeeID ||
+                  emp.employeeId ||
+                  existing.employeeId ||
+                  "",
+                roleType: resolvedRole,
               });
             });
           }
@@ -4052,23 +4061,26 @@ export default function Adjustments() {
                       : "Choose employee..."}
                   </option>
 
-                  {employees.map(
-                    (employee) => (
-                      <option
-                        key={
-                          employee.id
-                        }
-                        value={
-                          employee.id
-                        }
-                      >
-                        {
-                          employee.name
-                        }
-                      </option>
-                    )
-                  )}
+                  {employees.map((employee) => {
+                    const role = (employee.roleType || "").toLowerCase();
+                    const isIntern = role.includes("intern");
+                    const id = employee.employeeId ? String(employee.employeeId).trim() : "";
+                    
+                    let label = employee.name;
+                    if (isIntern) {
+                      label += id ? ` (Intern ID: ${id})` : ` (Intern)`;
+                    } else if (id) {
+                      label += ` (EMP ID: ${id})`;
+                    } else if (employee.roleType) {
+                      label += ` (${employee.roleType})`;
+                    }
 
+                    return (
+                      <option key={employee.id} value={employee.id}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
 
                 {employees.length >

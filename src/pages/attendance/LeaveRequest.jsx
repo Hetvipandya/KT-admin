@@ -179,6 +179,32 @@ export default function LeaveRequest() {
   const [success, setSuccess] = useState("");
   const [localOverrides, setLocalOverrides] = useState({});
 
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    leave: null,
+    status: "",
+    remark: "",
+  });
+
+  const openActionModal = (leave, status) => {
+    if (!leave) return;
+    setActionModal({
+      isOpen: true,
+      leave,
+      status,
+      remark: "",
+    });
+  };
+
+  const closeActionModal = () => {
+    setActionModal({
+      isOpen: false,
+      leave: null,
+      status: "",
+      remark: "",
+    });
+  };
+
   // ==========================================================
   // GET CURRENT USER
   // ==========================================================
@@ -409,19 +435,28 @@ export default function LeaveRequest() {
 
           remark:
             leave?.remark ||
+            leave?.description ||
             "",
 
-          teamLeadComment:
+          description:
+            leave?.description ||
+            leave?.remark ||
+            "",
+
+          teamLeadRemark:
+            leave?.teamLeadRemark ||
             leave?.teamLeadComment ||
             leave?.teamLeadRemarks ||
             "",
 
-          hrComment:
+          hrRemark:
+            leave?.hrRemark ||
             leave?.hrComment ||
             leave?.hrRemarks ||
             "",
 
-          adminComment:
+          adminRemark:
+            leave?.adminRemark ||
             leave?.adminComment ||
             leave?.adminRemarks ||
             "",
@@ -781,7 +816,8 @@ export default function LeaveRequest() {
 
   const handleAction = async (
     leave,
-    status
+    status,
+    remark = ""
   ) => {
     if (!leave) return;
 
@@ -821,6 +857,7 @@ export default function LeaveRequest() {
 
       const newStatusTitle = status === "approved" ? "Approved" : "Rejected";
       const newStatusLower = status === "approved" ? "approved" : "rejected";
+      const userRole = normalizeRole(currentRole);
 
       // Instantly record local override so refetch preserves it
       setLocalOverrides((prev) => ({
@@ -832,23 +869,67 @@ export default function LeaveRequest() {
       setRequests((prevRequests) =>
         prevRequests.map((item) => {
           if (item.id === leave.id) {
-            return {
+            const updated = {
               ...item,
-              adminStatus: newStatusTitle,
-              approvalStatus: newStatusTitle,
+              remark: remark || item.remark,
+              description: remark || item.description,
               rawLeave: {
                 ...item.rawLeave,
                 status: newStatusLower,
-                adminStatus: newStatusTitle,
+                remark: remark || item.rawLeave?.remark,
+                description: remark || item.rawLeave?.description,
               },
             };
+
+            if (userRole === "teamlead") {
+              updated.teamLeadStatus = newStatusTitle;
+              updated.teamLeadRemark = remark || item.teamLeadRemark;
+              if (status === "approved") {
+                updated.hrStatus = "Pending";
+                updated.approvalStatus = "Pending";
+              } else {
+                updated.hrStatus = "Rejected";
+                updated.approvalStatus = "Rejected";
+              }
+            } else if (userRole === "hr") {
+              updated.hrStatus = newStatusTitle;
+              updated.hrRemark = remark || item.hrRemark;
+              updated.approvalStatus = newStatusTitle;
+            } else if (userRole === "admin") {
+              updated.adminStatus = newStatusTitle;
+              updated.adminRemark = remark || item.adminRemark;
+              updated.approvalStatus = newStatusTitle;
+            }
+
+            return updated;
           }
           return item;
         })
       );
 
+      // Also update selectedLeave if open
+      setSelectedLeave((prev) => {
+        if (!prev || prev.id !== leave.id) return prev;
+        const updated = {
+          ...prev,
+          remark: remark || prev.remark,
+          description: remark || prev.description,
+        };
+        if (userRole === "teamlead") {
+          updated.teamLeadStatus = newStatusTitle;
+          updated.teamLeadRemark = remark || prev.teamLeadRemark;
+        } else if (userRole === "hr") {
+          updated.hrStatus = newStatusTitle;
+          updated.hrRemark = remark || prev.hrRemark;
+        } else if (userRole === "admin") {
+          updated.adminStatus = newStatusTitle;
+          updated.adminRemark = remark || prev.adminRemark;
+        }
+        return updated;
+      });
+
       // ======================================================
-      // BACKEND EXPECTS status IN BODY
+      // BACKEND EXPECTS status, remark, description IN BODY
       // ======================================================
 
       const response = await fetch(url, {
@@ -862,6 +943,8 @@ export default function LeaveRequest() {
         body: JSON.stringify({
           leaveId: leave.id,
           status,
+          remark: remark || "",
+          description: remark || "",
         }),
       });
 
@@ -892,6 +975,7 @@ export default function LeaveRequest() {
       }
 
       setSuccess(`Leave status updated to ${newStatusTitle} successfully.`);
+      closeActionModal();
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
       console.error("LEAVE ACTION ERROR:", error);
@@ -1099,7 +1183,12 @@ export default function LeaveRequest() {
     }
 
     const isActioning = actioningId === leave.id;
-    const currentStatus = normalizeStatus(leave?.adminStatus);
+    const loggedRole = normalizeRole(currentRole);
+    let relevantStatus = leave?.adminStatus;
+    if (loggedRole === "teamlead") relevantStatus = leave?.teamLeadStatus;
+    else if (loggedRole === "hr") relevantStatus = leave?.hrStatus;
+
+    const currentStatus = normalizeStatus(relevantStatus);
 
     if (currentStatus === "Approved") {
       return (
@@ -1113,7 +1202,7 @@ export default function LeaveRequest() {
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              handleAction(leave, "rejected");
+              openActionModal(leave, "rejected");
             }}
             disabled={isActioning}
             title="Reject Leave"
@@ -1137,7 +1226,7 @@ export default function LeaveRequest() {
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              handleAction(leave, "approved");
+              openActionModal(leave, "approved");
             }}
             disabled={isActioning}
             title="Approve Leave"
@@ -1155,7 +1244,7 @@ export default function LeaveRequest() {
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            handleAction(leave, "approved");
+            openActionModal(leave, "approved");
           }}
           disabled={isActioning}
           title="Approve Leave"
@@ -1168,7 +1257,7 @@ export default function LeaveRequest() {
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            handleAction(leave, "rejected");
+            openActionModal(leave, "rejected");
           }}
           disabled={isActioning}
           title="Reject Leave"
@@ -1536,24 +1625,32 @@ export default function LeaveRequest() {
                           </td>
 
                           <td className="px-4 py-4">
-                            <ApprovalStatus
-                              leave={request}
-                              stage="teamlead"
-                              status={request.teamLeadStatus}
-                            />
+                            {normalizeRole(currentRole) === "teamlead" && canTakeAction(request) ? (
+                              <ApprovalActions leave={request} />
+                            ) : (
+                              <ApprovalStatus
+                                leave={request}
+                                stage="teamlead"
+                                status={request.teamLeadStatus}
+                              />
+                            )}
                           </td>
 
                           <td className="px-4 py-4">
-                            <ApprovalStatus
-                              leave={request}
-                              stage="hr"
-                              status={request.hrStatus}
-                            />
+                            {normalizeRole(currentRole) === "hr" && canTakeAction(request) ? (
+                              <ApprovalActions leave={request} />
+                            ) : (
+                              <ApprovalStatus
+                                leave={request}
+                                stage="hr"
+                                status={request.hrStatus}
+                              />
+                            )}
                           </td>
 
                           <td className="px-4 py-4">
                             {normalizeRole(request.role) === "hr" ? (
-                              canTakeAction(request) ? (
+                              normalizeRole(currentRole) === "admin" && canTakeAction(request) ? (
                                 <ApprovalActions leave={request} />
                               ) : (
                                 <StatusBadge status={request.adminStatus} />
@@ -1686,11 +1783,15 @@ export default function LeaveRequest() {
                             TEAM LEAD
                           </p>
 
-                          <ApprovalStatus
-                            leave={request}
-                            stage="teamlead"
-                            status={request.teamLeadStatus}
-                          />
+                          {normalizeRole(currentRole) === "teamlead" && canTakeAction(request) ? (
+                            <ApprovalActions leave={request} />
+                          ) : (
+                            <ApprovalStatus
+                              leave={request}
+                              stage="teamlead"
+                              status={request.teamLeadStatus}
+                            />
+                          )}
                         </div>
 
                         <div>
@@ -1698,11 +1799,15 @@ export default function LeaveRequest() {
                             HR
                           </p>
 
-                          <ApprovalStatus
-                            leave={request}
-                            stage="hr"
-                            status={request.hrStatus}
-                          />
+                          {normalizeRole(currentRole) === "hr" && canTakeAction(request) ? (
+                            <ApprovalActions leave={request} />
+                          ) : (
+                            <ApprovalStatus
+                              leave={request}
+                              stage="hr"
+                              status={request.hrStatus}
+                            />
+                          )}
                         </div>
 
                         <div>
@@ -1711,7 +1816,7 @@ export default function LeaveRequest() {
                           </p>
 
                           {normalizeRole(request.role) === "hr" ? (
-                            canTakeAction(request) ? (
+                            normalizeRole(currentRole) === "admin" && canTakeAction(request) ? (
                               <ApprovalActions leave={request} />
                             ) : (
                               <StatusBadge
@@ -2056,18 +2161,73 @@ export default function LeaveRequest() {
                 </p>
               </div>
 
-              {/* REMARK */}
+              {/* REMARKS & DESCRIPTIONS */}
+              {(selectedLeave.teamLeadRemark ||
+                selectedLeave.hrRemark ||
+                selectedLeave.adminRemark ||
+                selectedLeave.remark) && (
+                <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/70 space-y-3">
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <MessageSquare className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      Remarks & Descriptions
+                    </span>
+                  </div>
 
-              {selectedLeave.remark && (
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  {selectedLeave.teamLeadRemark && (
+                    <div className="bg-white border border-blue-100 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          Team Lead Remark
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-700">
+                        {selectedLeave.teamLeadRemark}
+                      </p>
+                    </div>
+                  )}
 
-                  <p className="text-xs font-semibold text-gray-500">
-                    Remark
-                  </p>
+                  {selectedLeave.hrRemark && (
+                    <div className="bg-white border border-purple-100 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                          HR Remark
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-700">
+                        {selectedLeave.hrRemark}
+                      </p>
+                    </div>
+                  )}
 
-                  <p className="text-sm text-gray-700 mt-1">
-                    {selectedLeave.remark}
-                  </p>
+                  {selectedLeave.adminRemark && (
+                    <div className="bg-white border border-amber-100 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          Admin Remark
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-700">
+                        {selectedLeave.adminRemark}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedLeave.remark &&
+                    selectedLeave.remark !== selectedLeave.teamLeadRemark &&
+                    selectedLeave.remark !== selectedLeave.hrRemark &&
+                    selectedLeave.remark !== selectedLeave.adminRemark && (
+                      <div className="bg-white border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                            Description / Remark
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-700">
+                          {selectedLeave.remark}
+                        </p>
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -2101,7 +2261,7 @@ export default function LeaveRequest() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleAction(
+                        openActionModal(
                           selectedLeave,
                           "approved"
                         )
@@ -2125,7 +2285,7 @@ export default function LeaveRequest() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleAction(
+                        openActionModal(
                           selectedLeave,
                           "rejected"
                         )
@@ -2180,6 +2340,167 @@ export default function LeaveRequest() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          APPROVE / REJECT ACTION MODAL WITH DESCRIPTION
+      ======================================================== */}
+      {actionModal.isOpen && actionModal.leave && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+          onClick={closeActionModal}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* MODAL HEADER */}
+            <div
+              className={`p-5 flex items-start gap-4 border-b ${
+                actionModal.status === "approved"
+                  ? "bg-emerald-50/70 border-emerald-100"
+                  : "bg-rose-50/70 border-rose-100"
+              }`}
+            >
+              <div
+                className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
+                  actionModal.status === "approved"
+                    ? "bg-emerald-600 text-white"
+                    : "bg-rose-600 text-white"
+                }`}
+              >
+                {actionModal.status === "approved" ? (
+                  <CheckCircle className="w-6 h-6" />
+                ) : (
+                  <XCircle className="w-6 h-6" />
+                )}
+              </div>
+
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-gray-800">
+                  {actionModal.status === "approved"
+                    ? "Approve Leave Request"
+                    : "Reject Leave Request"}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Confirm action as{" "}
+                  <span className="font-semibold text-gray-700">
+                    {getActionRoleLabel()}
+                  </span>
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeActionModal}
+                className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* LEAVE SUMMARY PILL */}
+            <div className="p-5 space-y-4">
+              <div className="bg-gray-50 border border-gray-200/80 rounded-xl p-3.5 flex items-center justify-between gap-3 text-xs">
+                <div>
+                  <p className="font-bold text-gray-800 text-sm">
+                    {actionModal.leave.name}
+                  </p>
+                  <p className="text-gray-500 mt-0.5">
+                    {formatRole(actionModal.leave.role)} • {actionModal.leave.leaveType}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="inline-block px-2.5 py-1 rounded-full bg-white border border-gray-200 font-bold text-gray-800">
+                    {actionModal.leave.totalDays}{" "}
+                    {actionModal.leave.totalDays === 1 ? "Day" : "Days"}
+                  </span>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {formatDate(actionModal.leave.startDate)} -{" "}
+                    {formatDate(actionModal.leave.endDate)}
+                  </p>
+                </div>
+              </div>
+
+              {/* DESCRIPTION / REMARK INPUT */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center justify-between">
+                  <span>
+                    Description / Remark{" "}
+                    {actionModal.status === "rejected" ? (
+                      <span className="text-rose-500 font-semibold">
+                        (Reason for rejection)
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 font-normal">
+                        (Optional)
+                      </span>
+                    )}
+                  </span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={actionModal.remark}
+                  onChange={(e) =>
+                    setActionModal((prev) => ({
+                      ...prev,
+                      remark: e.target.value,
+                    }))
+                  }
+                  placeholder={
+                    actionModal.status === "approved"
+                      ? "Enter approval description or remark (e.g., Approved. Keep tasks updated.)..."
+                      : "Enter rejection reason / description (e.g., Rejected due to pending release)..."
+                  }
+                  className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-gray-400 resize-none transition"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* MODAL ACTIONS */}
+            <div className="bg-gray-50 border-t border-gray-200 px-5 py-3.5 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={closeActionModal}
+                disabled={actioningId === actionModal.leave?.id}
+                className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleAction(
+                    actionModal.leave,
+                    actionModal.status,
+                    actionModal.remark
+                  )
+                }
+                disabled={actioningId === actionModal.leave?.id}
+                className={`inline-flex items-center gap-1.5 px-5 py-2 text-white rounded-lg text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${
+                  actionModal.status === "approved"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                }`}
+              >
+                {actioningId === actionModal.leave?.id ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : actionModal.status === "approved" ? (
+                  <Check className="w-4 h-4 stroke-[2.5]" />
+                ) : (
+                  <X className="w-4 h-4 stroke-[2.5]" />
+                )}
+                {actioningId === actionModal.leave?.id
+                  ? "Processing..."
+                  : actionModal.status === "approved"
+                  ? "Confirm Approve"
+                  : "Confirm Reject"}
+              </button>
+            </div>
           </div>
         </div>
       )}
