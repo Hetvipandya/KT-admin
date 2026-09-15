@@ -1,6 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { PageSkeleton } from "./components/common/Loader";
+import { checkIsAuthenticated, setupAuthInterceptor } from "./utils/auth";
+
+// Initialize global interceptor for 401 Unauthorized API responses
+setupAuthInterceptor();
 
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -68,16 +72,41 @@ function PageHeader() {
 
 function AppShell() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem("isAuthenticated") === "true";
+    return checkIsAuthenticated();
   });
 
   useEffect(() => {
-    const handleStorage = () => {
-      setIsAuthenticated(localStorage.getItem("isAuthenticated") === "true");
+    const handleAuthChange = () => {
+      setIsAuthenticated(checkIsAuthenticated());
     };
 
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    // Listen for storage changes across tabs & auth-logout event from interceptors
+    window.addEventListener("storage", handleAuthChange);
+    window.addEventListener("auth-logout", handleAuthChange);
+
+    // Periodically verify if the token has expired (every 60 seconds)
+    const interval = setInterval(() => {
+      if (!checkIsAuthenticated()) {
+        setIsAuthenticated(false);
+      }
+    }, 60000);
+
+    // Also check when user focuses or returns to the tab
+    const handleVisibilityOrFocus = () => {
+      if (!checkIsAuthenticated()) {
+        setIsAuthenticated(false);
+      }
+    };
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+    return () => {
+      window.removeEventListener("storage", handleAuthChange);
+      window.removeEventListener("auth-logout", handleAuthChange);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   if (!isAuthenticated) {

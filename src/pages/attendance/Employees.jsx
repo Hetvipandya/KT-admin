@@ -24,8 +24,7 @@ const API_BASE =
   "https://kt-backend-1.onrender.com/api";
 
 const initialFormData = {
-  firstName: "",
-  lastName: "",
+  fullName: "",
   email: "",
   mobile: "",
   gender: "",
@@ -206,9 +205,19 @@ export default function Employees() {
   };
 
   const getFormPayload = () => {
+    const fullName = (formData.fullName || "").trim();
+    if (!fullName) {
+      alert("Full Name is required");
+      return null;
+    }
+
     const payload = {
       ...formData,
-      address: formData.address.trim(),
+      name: fullName,
+      fullName: fullName,
+      firstName: fullName,
+      lastName: "",
+      address: (formData.address || "").trim(),
     };
 
     if (!payload.address) {
@@ -281,9 +290,12 @@ export default function Employees() {
     setEditMode(true);
     setSelectedEmployeeId(employee._id);
 
+    const displayName =
+      employee.name ||
+      `${employee.firstName || ""} ${employee.lastName || ""}`.trim();
+
     setFormData({
-      firstName: employee.firstName || "",
-      lastName: employee.lastName || "",
+      fullName: displayName,
       email: employee.email || "",
       mobile: employee.mobile || "",
       designation: employee.designation || "",
@@ -632,12 +644,11 @@ export default function Employees() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="flex h-8 w-8 items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 text-xs font-bold text-white shadow-sm flex-shrink-0">
-                                {emp.firstName?.charAt(0)}
-                                {emp.lastName?.charAt(0)}
+                                {(emp.name || emp.firstName || "E")?.charAt(0)?.toUpperCase()}
                               </div>
 
                               <span className="font-medium text-gray-900">
-                                {emp.firstName} {emp.lastName}
+                                {emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim()}
                               </span>
                             </div>
                           </td>
@@ -1068,7 +1079,7 @@ export default function Employees() {
           }}
         >
           <div
-            className="relative max-w-lg max-h-[88vh] overflow-y-auto bg-white shadow-2xl animate-fade-in"
+            className="relative w-full max-w-xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col animate-fade-in border border-gray-100"
             role="dialog"
             aria-modal="true"
             aria-labelledby="employee-form-title"
@@ -1076,7 +1087,7 @@ export default function Employees() {
           >
 
             {/* MODAL HEADER */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-6 py-4">
+            <div className="bg-white border-b border-gray-100 px-6 py-4 flex-shrink-0">
               <div className="flex items-start justify-between gap-4">
 
                 <div>
@@ -1092,6 +1103,7 @@ export default function Employees() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => {
                     setShowModal(false);
                     resetForm();
@@ -1110,78 +1122,61 @@ export default function Employees() {
                   ? handleUpdateEmployee
                   : handleAddEmployee
               }
-              className="px-6 py-5 space-y-4"
+              className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
             >
 
-              {/* FIRST / LAST NAME */}
+              {/* FULL NAME (1 per row) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Full Name *
+                </label>
+
+                <input
+                  name="fullName"
+                  placeholder="e.g. Keyur Nai"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                />
+              </div>
+
+              {/* ROW 1: EMAIL & MOBILE NUMBER (2 per row) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    First Name *
+                    Email *
                   </label>
 
                   <input
-                    name="firstName"
-                    placeholder="e.g. John"
-                    value={formData.firstName}
+                    name="email"
+                    type="email"
+                    placeholder="e.g. itsmetilaksoni@gmail.com"
+                    value={formData.email}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                    className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Last Name *
+                    Mobile Number *
                   </label>
 
                   <input
-                    name="lastName"
-                    placeholder="e.g. Doe"
-                    value={formData.lastName}
+                    name="mobile"
+                    placeholder="e.g. 7896321550"
+                    value={formData.mobile}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                    className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
                 </div>
               </div>
 
-              {/* EMAIL */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email *
-                </label>
-
-                <input
-                  name="email"
-                  type="email"
-                  placeholder="e.g. john.doe@company.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
-                />
-              </div>
-
-              {/* MOBILE */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Mobile Number *
-                </label>
-
-                <input
-                  name="mobile"
-                  placeholder="e.g. 9876543210"
-                  value={formData.mobile}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
-                />
-              </div>
-
-              {/* DESIGNATION, DEPARTMENT & ROLE */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* ROW 2: DESIGNATION & DEPARTMENT (2 per row) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Designation *
@@ -1189,11 +1184,11 @@ export default function Employees() {
 
                   <input
                     name="designation"
-                    placeholder="e.g. Software Engineer, UI Intern"
+                    placeholder="e.g. UI/UX Designer"
                     value={formData.designation}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                    className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
                 </div>
 
@@ -1205,14 +1200,17 @@ export default function Employees() {
                   <input
                     type="text"
                     name="department"
-                    placeholder="e.g. IT, HR, Sales"
+                    placeholder="e.g. Design, IT, HR"
                     value={formData.department}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                    className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
                 </div>
+              </div>
 
+              {/* ROW 3: ROLE & GENDER (2 per row) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Role *
@@ -1223,16 +1221,37 @@ export default function Employees() {
                     value={formData.role || "employee"}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg bg-white"
+                    className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg bg-white"
                   >
                     <option value="employee">Employee</option>
                     <option value="intern">Intern</option>
                     <option value="team lead">Team Lead</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Gender *
+                  </label>
+
+                  <select
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3.5 py-2.5 border border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                  >
+                    <option value="">Select gender</option>
+                    {["Male", "Female", "Other"].map((gender) => (
+                      <option key={gender} value={gender}>
+                        {gender}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              {/* DOB / BLOOD GROUP */}
+              {/* ROW 4: DATE OF BIRTH & BLOOD GROUP (2 per row) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -1245,7 +1264,7 @@ export default function Employees() {
                     value={formData.dob}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                    className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   />
                 </div>
 
@@ -1259,7 +1278,7 @@ export default function Employees() {
                     value={formData.bloodGroup}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2.5 border border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                    className="w-full px-3.5 py-2.5 border border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                   >
                     <option value="">Select blood group</option>
                     {[
@@ -1278,30 +1297,9 @@ export default function Employees() {
                     ))}
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Gender *
-                  </label>
-
-                  <select
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-3 py-2.5 border border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
-                  >
-                    <option value="">Select gender</option>
-                    {["Male", "Female", "Other"].map((gender) => (
-                      <option key={gender} value={gender}>
-                        {gender}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
-              {/* ADDRESS */}
+              {/* ADDRESS (1 per row) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Address *
@@ -1314,12 +1312,12 @@ export default function Employees() {
                   value={formData.address}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
+                  className="w-full px-3.5 py-2.5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition rounded-lg"
                 />
               </div>
 
               {/* BUTTONS */}
-              <div className="flex gap-3 pt-4 border-t border-gray-100 sticky bottom-0 bg-white pb-2">
+              <div className="flex gap-3 pt-4 border-t border-gray-100 sticky bottom-0 bg-white pb-1">
 
                 <button
                   type="button"
@@ -1334,7 +1332,7 @@ export default function Employees() {
 
                 <button
                   type="submit"
-                  className={`flex-1 px-4 py-2.5 text-sm font-medium text-white transition-colors rounded-lg ${
+                  className={`flex-1 px-4 py-2.5 text-sm font-medium text-white transition-colors rounded-lg shadow-xs ${
                     editMode
                       ? "bg-emerald-600 hover:bg-emerald-700"
                       : "bg-blue-600 hover:bg-blue-700"

@@ -824,6 +824,11 @@ export default function LeaveRequest() {
     setError("");
     setSuccess("");
 
+    if (!remark || !remark.trim()) {
+      setError("Please enter a description/remark before submitting.");
+      return;
+    }
+
     // --------------------------------------------------------
     // Authorization check
     // --------------------------------------------------------
@@ -2429,15 +2434,7 @@ export default function LeaveRequest() {
                 <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center justify-between">
                   <span>
                     Description / Remark{" "}
-                    {actionModal.status === "rejected" ? (
-                      <span className="text-rose-500 font-semibold">
-                        (Reason for rejection)
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 font-normal">
-                        (Optional)
-                      </span>
-                    )}
+                    <span className="text-rose-500 font-bold">* (Required)</span>
                   </span>
                 </label>
                 <textarea
@@ -2451,12 +2448,17 @@ export default function LeaveRequest() {
                   }
                   placeholder={
                     actionModal.status === "approved"
-                      ? "Enter approval description or remark (e.g., Approved. Keep tasks updated.)..."
-                      : "Enter rejection reason / description (e.g., Rejected due to pending release)..."
+                      ? "Enter approval description / remark (Required)..."
+                      : "Enter rejection reason / description (Required)..."
                   }
                   className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-gray-400 resize-none transition"
                   autoFocus
                 />
+                {!actionModal.remark?.trim() && (
+                  <p className="text-[11px] text-rose-500 mt-1">
+                    * Description is required to {actionModal.status === "approved" ? "approve" : "reject"} this leave.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -2480,8 +2482,11 @@ export default function LeaveRequest() {
                     actionModal.remark
                   )
                 }
-                disabled={actioningId === actionModal.leave?.id}
-                className={`inline-flex items-center gap-1.5 px-5 py-2 text-white rounded-lg text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${
+                disabled={
+                  actioningId === actionModal.leave?.id ||
+                  !actionModal.remark?.trim()
+                }
+                className={`inline-flex items-center gap-1.5 px-5 py-2 text-white rounded-lg text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
                   actionModal.status === "approved"
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-rose-600 hover:bg-rose-700"

@@ -2332,15 +2332,30 @@ export default function Adjustments() {
           console.warn("Error fetching /attendance/admin/all:", aErr);
         }
 
-        const employeeList = Array.from(employeeMap.values()).sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
+        const employeeList = Array.from(employeeMap.values())
+          .filter((emp) => {
+            const role = (emp.roleType || "").toLowerCase().trim();
+            const id = (emp.employeeId || "").toUpperCase().trim();
+            return role !== "admin" && !id.startsWith("ADMIN");
+          })
+          .sort((a, b) => a.name.localeCompare(b.name));
 
         setEmployees(employeeList);
+
+        // Auto-cleanup local adjustments referencing deleted employees
+        try {
+          const localAdjs = JSON.parse(localStorage.getItem("localAdjustments") || "[]");
+          const cleanedLocal = cleanOrphanedAdjustments(localAdjs, employeeList);
+          localStorage.setItem("localAdjustments", JSON.stringify(cleanedLocal));
+        } catch (e) {
+          console.warn("Clean local adjustments error:", e);
+        }
 
         if (employeeList.length === 0) {
           setError("No employees found.");
         }
+
+        await fetchRecentAdjustments(employeeList);
       } catch (err) {
         console.error(err);
         setEmployees([]);
@@ -2351,100 +2366,93 @@ export default function Adjustments() {
     };
 
     fetchAllEmployees();
-    fetchRecentAdjustments();
   }, []);
+
+  // ============================================================
+  // EMPLOYEE NAME RESOLVER & CLEANUP
+  // ============================================================
+
+  const getEmployeeName = (empId) => {
+    if (!empId) return "";
+    const idStr = typeof empId === "object" ? String(empId._id || empId.id || "") : String(empId);
+    const found = employees.find(
+      (e) => String(e.id) === idStr || String(e._id) === idStr || String(e.employeeId) === idStr
+    );
+    return found ? found.name : "";
+  };
+
+  const cleanOrphanedAdjustments = (adjsList, currentEmployees) => {
+    if (!Array.isArray(adjsList) || !Array.isArray(currentEmployees) || currentEmployees.length === 0) {
+      return adjsList || [];
+    }
+    const validEmpIds = new Set();
+    currentEmployees.forEach((emp) => {
+      if (emp.id) validEmpIds.add(String(emp.id));
+      if (emp._id) validEmpIds.add(String(emp._id));
+      if (emp.employeeId) validEmpIds.add(String(emp.employeeId));
+    });
+
+    return adjsList.filter((item) => {
+      if (!item) return false;
+      const empId = typeof item.employeeId === "object" ? (item.employeeId?._id || item.employeeId?.id) : item.employeeId;
+      return empId && validEmpIds.has(String(empId));
+    });
+  };
 
   // ============================================================
   // FETCH ADJUSTMENT HISTORY
   // ============================================================
 
-  const fetchRecentAdjustments =
-    async () => {
-      setFetchingLogs(true);
+  const fetchRecentAdjustments = async (currentEmployeesList = null) => {
+    setFetchingLogs(true);
+    const activeList = currentEmployeesList || employees;
 
-      try {
-        const token =
-          localStorage.getItem("token");
+    try {
+      const localAdjs = JSON.parse(localStorage.getItem("localAdjustments") || "[]");
+      let backendData = [];
 
-        if (!token) {
-          console.warn(
-            "No token found, skipping fetch"
-          );
-
-          setFetchingLogs(false);
-
-          return;
-        }
-
-        const response =
-          await fetch(
-            `${API_BASE_URL}/adjustment/history`,
-            {
-              method: "GET",
-
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type":
-                  "application/json",
-              },
-            }
-          );
-
-        const contentType =
-          response.headers.get(
-            "content-type"
-          );
-
-        if (
-          !contentType ||
-          !contentType.includes(
-            "application/json"
-          )
-        ) {
-          throw new Error(
-            "Server returned HTML instead of JSON."
-          );
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            `HTTP error! status: ${response.status}`
-          );
-        }
-
-        const data =
-          await response.json();
-
-        if (
-          data.success &&
-          data.data
-        ) {
-          const localAdjs = JSON.parse(localStorage.getItem("localAdjustments") || "[]");
-          const combined = [...localAdjs, ...data.data];
-
-          const uniqueMap = new Map();
-          combined.forEach((item) => {
-            if (!item) return;
-            const empId = typeof item.employeeId === "object" ? (item.employeeId?._id || item.employeeId?.id) : item.employeeId;
-            const key = `${empId || "unknown"}-${item.date || ""}`;
-            if (!uniqueMap.has(key)) {
-              uniqueMap.set(key, item);
-            }
+      const token = localStorage.getItem("token");
+      if (token) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/adjustment/history`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
           });
 
-          setRecentAdjustments(
-            Array.from(uniqueMap.values()).slice(0, 10)
-          );
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && Array.isArray(data.data)) {
+              backendData = data.data;
+            }
+          }
+        } catch (apiErr) {
+          // Endpoint may not exist on backend, fall back to local
         }
-      } catch (error) {
-        console.error(
-          "Error fetching adjustments:",
-          error
-        );
-      } finally {
-        setFetchingLogs(false);
       }
-    };
+
+      const combined = [...localAdjs, ...backendData];
+      const cleaned = cleanOrphanedAdjustments(combined, activeList);
+
+      const uniqueMap = new Map();
+      cleaned.forEach((item) => {
+        if (!item) return;
+        const empId = typeof item.employeeId === "object" ? (item.employeeId?._id || item.employeeId?.id) : item.employeeId;
+        const key = `${empId || "unknown"}-${item.date || ""}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, item);
+        }
+      });
+
+      setRecentAdjustments(Array.from(uniqueMap.values()).slice(0, 10));
+    } catch (error) {
+      console.error("Error fetching adjustments:", error);
+    } finally {
+      setFetchingLogs(false);
+    }
+  };
 
   // ============================================================
   // SESSION CHANGE
@@ -3304,79 +3312,7 @@ export default function Adjustments() {
     }
   };
 
-  // ============================================================
-  // GET EMPLOYEE NAME
-  // ============================================================
 
-  const getEmployeeName = (
-    employeeId
-  ) => {
-    if (!employeeId) {
-      return "Unknown Employee";
-    }
-
-    if (
-      typeof employeeId ===
-      "object"
-    ) {
-      if (
-        employeeId.name
-      ) {
-        return employeeId.name;
-      }
-
-      if (
-        employeeId.fullName
-      ) {
-        return employeeId.fullName;
-      }
-
-      if (
-        employeeId.employeeName
-      ) {
-        return employeeId.employeeName;
-      }
-
-      if (
-        employeeId.user?.name
-      ) {
-        return employeeId.user.name;
-      }
-
-      if (
-        employeeId.employee?.name
-      ) {
-        return employeeId.employee.name;
-      }
-
-      if (
-        employeeId.userId?.name
-      ) {
-        return employeeId.userId.name;
-      }
-
-      if (
-        employeeId.firstName ||
-        employeeId.lastName
-      ) {
-        return `${employeeId.firstName || ""} ${
-          employeeId.lastName || ""
-        }`.trim();
-      }
-
-      return "Unknown Employee";
-    }
-
-    const employee =
-      employees.find(
-        (emp) =>
-          emp.id === employeeId
-      );
-
-    return employee
-      ? employee.name
-      : "Unknown Employee";
-  };
 
   // ============================================================
   // STATUS STYLE
@@ -4061,7 +3997,13 @@ export default function Adjustments() {
                       : "Choose employee..."}
                   </option>
 
-                  {employees.map((employee) => {
+                  {employees
+                    .filter((emp) => {
+                      const role = (emp.roleType || "").toLowerCase().trim();
+                      const id = (emp.employeeId || "").toUpperCase().trim();
+                      return role !== "admin" && !id.startsWith("ADMIN");
+                    })
+                    .map((employee) => {
                     const role = (employee.roleType || "").toLowerCase();
                     const isIntern = role.includes("intern");
                     const id = employee.employeeId ? String(employee.employeeId).trim() : "";
@@ -4548,27 +4490,22 @@ export default function Adjustments() {
 
             ) : (
 
-              recentAdjustments.map(
-                (item) => (
-
-                  <div
-                    key={
-                      item._id
-                    }
-                    className="p-3.5 border border-gray-200 bg-gray-50 text-xs text-gray-600"
-                  >
-
-                    <div className="flex flex-wrap justify-between items-start gap-2">
-
-                      <span className="font-semibold text-gray-800 text-sm">
-
-                        {item.employeeName ||
-                          getEmployeeName(
-                            item.employeeId
-                          ) ||
-                          "Unknown Employee"}
-
-                      </span>
+              recentAdjustments
+                .filter((item) => {
+                  const resolvedName = item.employeeName || getEmployeeName(item.employeeId);
+                  return resolvedName && resolvedName !== "Unknown Employee" && resolvedName !== "Unknown User";
+                })
+                .map((item) => {
+                  const resolvedName = item.employeeName || getEmployeeName(item.employeeId);
+                  return (
+                    <div
+                      key={item._id}
+                      className="p-3.5 border border-gray-200 bg-gray-50 text-xs text-gray-600"
+                    >
+                      <div className="flex flex-wrap justify-between items-start gap-2">
+                        <span className="font-semibold text-gray-800 text-sm">
+                          {resolvedName}
+                        </span>
 
                       <span
                         className={`text-[10px] font-medium px-2 py-0.5 border ${getStatusStyle(
@@ -4728,10 +4665,8 @@ export default function Adjustments() {
                     </button>
 
                   </div>
-
-                )
-              )
-
+                );
+              })
             )}
 
           </div>

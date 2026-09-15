@@ -703,6 +703,10 @@ async function fetchHolidays() {
     };
 
     const confirmAction = async () => {
+      if (!leaveRemark || !leaveRemark.trim()) {
+        alert("Please enter a description / remark.");
+        return;
+      }
       await updateLeaveStatus(selectedLeave, selectedStatus, leaveRemark);
       setShowModal(false);
       setLeaveRemark("");
@@ -1593,16 +1597,21 @@ async function fetchHolidays() {
               </p>
 
               <div className="mt-3 text-left">
-                <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                  Description / Remark {selectedStatus === "rejected" ? "(Reason)" : "(Optional)"}
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                  Description / Remark <span className="text-rose-500 font-bold">* (Required)</span>
                 </label>
                 <textarea
                   rows={2}
                   value={leaveRemark}
                   onChange={(e) => setLeaveRemark(e.target.value)}
-                  placeholder="Enter description or remark..."
+                  placeholder="Enter description or remark (Required)..."
                   className="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
                 />
+                {!leaveRemark?.trim() && (
+                  <p className="text-[10px] text-rose-500 mt-1">
+                    * Description is required before confirming.
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-2 mt-4">
@@ -1619,7 +1628,8 @@ async function fetchHolidays() {
                 <button
                   type="button"
                   onClick={confirmAction}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium text-white transition-colors shadow-xs ${
+                  disabled={!leaveRemark?.trim()}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium text-white transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed ${
                     selectedStatus === "approved" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
                   }`}
                 >
