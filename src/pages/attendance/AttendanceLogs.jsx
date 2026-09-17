@@ -176,7 +176,7 @@ const normalizeStatus = (item) => {
       return 'late';
     }
     if (checkInMinutes <= OFFICE_START) {
-      return 'present';
+      return 'on time';
     }
   }
 
@@ -226,11 +226,11 @@ const normalizeStatus = (item) => {
     rawStatus === 'present' ||
     rawStatus === 'on time'
   ) {
-    return 'present';
+    return 'on time';
   }
 
   if (totalHours >= 8) {
-    return 'present';
+    return 'on time';
   }
 
   return rawStatus || 'unknown';
@@ -1383,10 +1383,18 @@ export default function AttendanceLogs() {
             .toLowerCase()
             .trim();
 
-        const matchesStatus =
-          filterStatus === 'all' ||
-          currentStatus ===
-            filterStatus.toLowerCase();
+        const selectedFilter = filterStatus.toLowerCase().trim();
+
+        let matchesStatus = selectedFilter === 'all';
+        if (!matchesStatus) {
+          if (selectedFilter === 'on time' || selectedFilter === 'present') {
+            matchesStatus = currentStatus === 'on time' || currentStatus === 'present';
+          } else if (selectedFilter === 'half day') {
+            matchesStatus = currentStatus === 'half day' || currentStatus === 'half-day' || currentStatus === 'halfday';
+          } else {
+            matchesStatus = currentStatus === selectedFilter;
+          }
+        }
 
         return (
           matchesSearch &&
@@ -1438,21 +1446,25 @@ export default function AttendanceLogs() {
     return normalizeStatus(log);
   };
 
-  const onTimeCount = logs.filter(
-    (log) => getNormalizedStatus(log) === 'on time'
-  ).length;
+  const onTimeCount = logs.filter((log) => {
+    const s = getNormalizedStatus(log);
+    return s === 'on time' || s === 'present';
+  }).length;
 
-  const lateCount = logs.filter(
-    (log) => getNormalizedStatus(log) === 'late'
-  ).length;
+  const lateCount = logs.filter((log) => {
+    const s = getNormalizedStatus(log);
+    return s === 'late';
+  }).length;
 
-  const halfDayCount = logs.filter(
-    (log) => getNormalizedStatus(log) === 'half day'
-  ).length;
+  const halfDayCount = logs.filter((log) => {
+    const s = getNormalizedStatus(log);
+    return s === 'half day' || s === 'half-day' || s === 'halfday';
+  }).length;
 
-  const absentCount = logs.filter(
-    (log) => getNormalizedStatus(log) === 'absent'
-  ).length;
+  const absentCount = logs.filter((log) => {
+    const s = getNormalizedStatus(log);
+    return s === 'absent';
+  }).length;
 
   /* =========================================================
      EXPORT EXCEL

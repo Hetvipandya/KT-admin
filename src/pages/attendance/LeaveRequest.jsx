@@ -1550,6 +1550,10 @@ export default function LeaveRequest() {
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
                         Workflow
                       </th>
+
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                        Approver Reason
+                      </th>
                     </tr>
                   </thead>
 
@@ -1673,6 +1677,44 @@ export default function LeaveRequest() {
                                 request
                               )}
                             </span>
+                          </td>
+
+                          <td className="px-4 py-4 min-w-[200px]">
+                            {request.teamLeadRemark || request.hrRemark || request.adminRemark || request.remark || request.description ? (
+                              <div className="space-y-1.5 text-xs">
+                                {request.teamLeadRemark && (
+                                  <div className="flex items-start gap-1">
+                                    <span className="font-bold text-amber-700 shrink-0">TL:</span>
+                                    <span className="text-gray-700 whitespace-normal break-words">
+                                      {request.teamLeadRemark}
+                                    </span>
+                                  </div>
+                                )}
+                                {request.hrRemark && (
+                                  <div className="flex items-start gap-1">
+                                    <span className="font-bold text-purple-700 shrink-0">HR:</span>
+                                    <span className="text-gray-700 whitespace-normal break-words">
+                                      {request.hrRemark}
+                                    </span>
+                                  </div>
+                                )}
+                                {request.adminRemark && (
+                                  <div className="flex items-start gap-1">
+                                    <span className="font-bold text-blue-700 shrink-0">Admin:</span>
+                                    <span className="text-gray-700 whitespace-normal break-words">
+                                      {request.adminRemark}
+                                    </span>
+                                  </div>
+                                )}
+                                {!request.teamLeadRemark && !request.hrRemark && !request.adminRemark && (request.remark || request.description) && (
+                                  <span className="text-gray-700 whitespace-normal break-words">
+                                    {request.remark || request.description}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
                           </td>
 
                         </tr>
@@ -1838,6 +1880,37 @@ export default function LeaveRequest() {
                         </div>
 
                       </div>
+
+                      {(request.teamLeadRemark || request.hrRemark || request.adminRemark || request.remark || request.description) && (
+                        <div className="mt-2.5 pt-2 border-t border-gray-100 space-y-1 text-xs">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                            Approver Remarks
+                          </p>
+                          {request.teamLeadRemark && (
+                            <p className="text-xs text-gray-600">
+                              <span className="font-semibold text-amber-700">TL: </span>
+                              {request.teamLeadRemark}
+                            </p>
+                          )}
+                          {request.hrRemark && (
+                            <p className="text-xs text-gray-600">
+                              <span className="font-semibold text-purple-700">HR: </span>
+                              {request.hrRemark}
+                            </p>
+                          )}
+                          {request.adminRemark && (
+                            <p className="text-xs text-gray-600">
+                              <span className="font-semibold text-blue-700">Admin: </span>
+                              {request.adminRemark}
+                            </p>
+                          )}
+                          {!request.teamLeadRemark && !request.hrRemark && !request.adminRemark && (request.remark || request.description) && (
+                            <p className="text-xs text-gray-600">
+                              {request.remark || request.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                     </div>
                   )

@@ -949,45 +949,122 @@ const fetchAllMembers = async () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         
         {/* Header Section */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
-                <div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-500 to-indigo-600 border shadow-lg shadow-indigo-500/20">
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Team Members</h1>
+        <div className="mb-5 sm:mb-6 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 shrink-0">
+                <Users className="w-5 h-5" />
               </div>
-              <p className="text-[11px] sm:text-sm text-slate-500 ml-1">
-                {filteredMembers.length} total • 
-                <span className="text-violet-600 font-medium"> {members.filter(m => m.roleType === 'intern').length}</span> interns • 
-                <span className="text-amber-600 font-medium"> {members.filter(m => m.roleType === 'tl').length}</span> leads • 
-                <span className="text-blue-600 font-medium"> {members.filter(m => m.roleType === 'employee').length}</span> employees
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Team Members</h1>
+                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
+                    Directory
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Manage and overview all staff, team leads, interns, and employees.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Stat Chips */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedRole('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  selectedRole === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 border border-slate-200/60'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Total</span>
+                <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
+                  selectedRole === 'all' ? 'bg-white/20 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                }`}>
+                  {members.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRole('intern')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  selectedRole === 'intern'
+                    ? 'bg-violet-600 text-white shadow-xs'
+                    : 'bg-violet-50 text-violet-700 hover:bg-violet-100/80 border border-violet-200/80'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Interns</span>
+                <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
+                  selectedRole === 'intern' ? 'bg-white/20 text-white' : 'bg-violet-100 text-violet-800'
+                }`}>
+                  {members.filter(m => m.roleType === 'intern').length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRole('tl')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  selectedRole === 'tl'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100/80 border border-amber-200/80'
+                }`}
+              >
+                <Star className="w-3.5 h-3.5" />
+                <span>Leads</span>
+                <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
+                  selectedRole === 'tl' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {members.filter(m => m.roleType === 'tl').length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRole('employee')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  selectedRole === 'employee'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100/80 border border-blue-200/80'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Employees</span>
+                <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
+                  selectedRole === 'employee' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {members.filter(m => m.roleType === 'employee').length}
+                </span>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Filters Section - Compact */}
-        <div className="mb-4 flex flex-col sm:flex-row gap-2">
+        {/* Filters Section - Compact & Modern */}
+        <div className="mb-4 flex flex-col sm:flex-row gap-2.5">
           <div className="flex-1 relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search members..."
+              placeholder="Search members by name, email, designation..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+              className="w-full pl-9 pr-3.5 py-2 text-sm border border-slate-200/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white shadow-2xs transition-all placeholder:text-slate-400"
             />
           </div>
           
           <div className="flex gap-2">
             <div className="relative flex-1 sm:flex-none">
-              <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
-                className="w-full sm:w-36 pl-8 pr-7 py-1.5 text-sm border border-slate-300 focus:outline-none focus:ring-1 bg-white appearance-none cursor-pointer"
+                className="w-full sm:w-40 pl-8.5 pr-8 py-2 text-sm border border-slate-200/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white appearance-none cursor-pointer shadow-2xs font-medium text-slate-700"
               >
                 {roles.map(role => (
                   <option key={role} value={role}>
@@ -998,11 +1075,11 @@ const fetchAllMembers = async () => {
             </div>
 
             <div className="relative flex-1 sm:flex-none">
-              <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full sm:w-32 pl-8 pr-7 py-1.5 text-sm border border-slate-300 focus:outline-none focus:ring-1 bg-white appearance-none cursor-pointer"
+                className="w-full sm:w-36 pl-8.5 pr-8 py-2 text-sm border border-slate-200/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white appearance-none cursor-pointer shadow-2xs font-medium text-slate-700"
               >
                 {statuses.map(status => (
                   <option key={status} value={status}>
@@ -1020,18 +1097,18 @@ const fetchAllMembers = async () => {
             <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
           </div>
         ) : error ? (
-          <div className="border border-rose-300 bg-rose-50 px-3 py-2.5 text-rose-700 flex items-center gap-2 text-sm">
+          <div className="border border-rose-200 bg-rose-50/80 rounded-xl px-4 py-3 text-rose-700 flex items-center gap-2.5 text-sm">
             <UserX className="w-4 h-4 text-rose-600 flex-shrink-0" />
             <span>{error}</span>
           </div>
         ) : filteredMembers.length === 0 ? (
-          <div className="border border-slate-300 bg-white p-6 text-center">
-            <Users className="w-8 h-8 text-slate-400 mx-auto mb-1.5" />
+          <div className="border border-dashed border-slate-200 rounded-2xl bg-white p-8 text-center shadow-xs">
+            <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
             <h3 className="text-sm font-semibold text-slate-900">No members found</h3>
-            <p className="text-xs text-slate-500">Try adjusting your filters</p>
+            <p className="text-xs text-slate-500 mt-0.5">Try adjusting your search terms or filters</p>
           </div>
         ) : ( 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {filteredMembers.map((member) => {
               const statusStyle = getStatusStyle(member.status);
               const attendanceStatus = attendanceStatusMap[member.id] || 'No status';
@@ -1042,23 +1119,23 @@ const fetchAllMembers = async () => {
                 <div
                   key={member.id}
                   onClick={() => handleMemberClick(member)}
-                  className="group relative bg-white border border-slate-300 hover:border-indigo-400 p-3 transition-all hover:shadow-md cursor-pointer"
+                  className="group relative bg-white border border-slate-200/80 hover:border-indigo-300/90 rounded-2xl p-3.5 transition-all hover:shadow-md cursor-pointer flex flex-col justify-between"
                 >
-                  <button className="absolute top-1.5 right-1.5 p-0.5 opacity-0 group-hover:opacity-100 hover:bg-slate-50">
+                  <button className="absolute top-2.5 right-2.5 p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-slate-100 transition-opacity">
                     <MoreVertical className="w-3.5 h-3.5 text-slate-400" />
                   </button>
 
                   <div className="flex gap-3 items-start">
                     <div className="relative flex-shrink-0">
-                      <div className={`w-10 h-10 bg-gradient-to-br ${member.avatarColor} text-white flex items-center justify-center font-bold text-xs shadow-sm`}>
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${member.avatarColor} text-white flex items-center justify-center font-bold text-xs shadow-xs`}>
                         {member.initials}
                       </div>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${statusStyle.dot} ring-2 ring-white`}></div>
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full ${statusStyle.dot} ring-2 ring-white`}></div>
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        <h3 className="text-sm font-semibold text-slate-900 truncate max-w-[120px] sm:max-w-[140px]">
+                        <h3 className="text-sm font-bold text-slate-900 truncate max-w-[130px] sm:max-w-[150px]">
                           {member.name}
                         </h3>
                       </div>
@@ -1068,22 +1145,22 @@ const fetchAllMembers = async () => {
                         <span className="truncate">{member.designation}</span>
                       </div>
                       
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium border ${roleBadgeStyle}`}>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-md border ${roleBadgeStyle}`}>
                           {getRoleIcon(member.roleType)}
                           {member.roleType === 'tl' ? 'Lead' : member.roleType === 'intern' ? 'Intern' : 'Employee'}
                         </span>
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-md ${statusStyle.bg} ${statusStyle.text}`}>
                           {member.status}
                         </span>
-                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium ${attendanceStatusStyle.bg} ${attendanceStatusStyle.text}`}>
+                        <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-semibold rounded-md ${attendanceStatusStyle.bg} ${attendanceStatusStyle.text}`}>
                           {getPunctualityIcon(attendanceStatus)}
                           {attendanceStatus}
                         </span>
                       </div>
                     </div>
 
-                    <div className="self-center p-0.5 text-slate-300 group-hover:text-indigo-600">
+                    <div className="self-center p-1 text-slate-300 group-hover:text-indigo-600 transition-colors">
                       <ChevronRight className="w-4 h-4" />
                     </div>
                   </div>

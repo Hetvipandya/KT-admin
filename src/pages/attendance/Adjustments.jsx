@@ -2637,6 +2637,209 @@ export default function Adjustments() {
   };
 
   // ============================================================
+  // AUTO FETCH & PREFILL ATTENDANCE TIMINGS
+  // ============================================================
+
+  const formatTimeToHHMM = (timeVal) => {
+    if (!timeVal) return "";
+    try {
+      if (typeof timeVal === "string" && /^\d{2}:\d{2}$/.test(timeVal.trim())) {
+        return timeVal.trim();
+      }
+      const d = new Date(timeVal);
+      if (isNaN(d.getTime())) {
+        const match = String(timeVal).match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+        if (match) {
+          let hour = parseInt(match[1], 10);
+          const min = match[2];
+          const ampm = (match[3] || "").toLowerCase();
+          if (ampm === "pm" && hour < 12) hour += 12;
+          if (ampm === "am" && hour === 12) hour = 0;
+          return `${String(hour).padStart(2, "0")}:${min}`;
+        }
+        return "";
+      }
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      return `${hours}:${minutes}`;
+    } catch {
+      return "";
+    }
+  };
+
+  const isSameDate = (recordDate, checkInTime, selectedDateStr) => {
+    if (!selectedDateStr) return false;
+    const [sYear, sMonth, sDay] = selectedDateStr.split("-").map((v) => parseInt(v, 10));
+
+    if (recordDate && typeof recordDate === "string") {
+      const clean = recordDate.trim();
+      if (clean === selectedDateStr) return true;
+      const parts = clean.split(/[-/]/).map((v) => parseInt(v, 10));
+      if (parts.length === 3) {
+        if (parts[2] === sYear && parts[1] === sMonth && parts[0] === sDay) return true;
+        if (parts[0] === sYear && parts[1] === sMonth && parts[2] === sDay) return true;
+      }
+    }
+
+    const timeToCheck = checkInTime || recordDate;
+    if (timeToCheck) {
+      const d = new Date(timeToCheck);
+      if (!isNaN(d.getTime())) {
+        if (d.getFullYear() === sYear && d.getMonth() + 1 === sMonth && d.getDate() === sDay) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  useEffect(() => {
+    if (editMode) return;
+
+    const autoPopulateAttendance = async () => {
+      const { employeeId, date } = formData;
+      if (!employeeId || !date) {
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        let matchedRecord = null;
+
+        // 1. Fetch by employee history
+        try {
+          const res = await fetch(`${API_BASE_URL}/attendance/history/${employeeId}`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            const records = data.data || data.attendance || data.records || [];
+            matchedRecord = records.find((rec) => isSameDate(rec.date, rec.checkInTime, date));
+          }
+        } catch (hErr) {
+          console.warn("History fetch error:", hErr);
+        }
+
+        // 2. Fallback to /attendance/admin/all if not matched
+        if (!matchedRecord) {
+          try {
+            const allRes = await fetch(`${API_BASE_URL}/attendance/admin/all`, { headers });
+            if (allRes.ok) {
+              const allData = await allRes.json();
+              const allList = allData.data || allData.attendance || allData.records || [];
+              matchedRecord = allList.find((rec) => {
+                const recEmpId =
+                  rec.userId?._id ||
+                  rec.userId?.id ||
+                  rec.userId ||
+                  rec.employeeId?._id ||
+                  rec.employeeId;
+                return (
+                  String(recEmpId) === String(employeeId) &&
+                  isSameDate(rec.date, rec.checkInTime, date)
+                );
+              });
+            }
+          } catch (aErr) {
+            console.warn("Admin all fetch error:", aErr);
+          }
+        }
+
+        // 3. Fallback to /attendance/history/date/:date
+        if (!matchedRecord) {
+          try {
+            const dateRes = await fetch(`${API_BASE_URL}/attendance/history/date/${date}`, { headers });
+            if (dateRes.ok) {
+              const dateData = await dateRes.json();
+              const dateList = dateData.data || dateData.attendance || [];
+              matchedRecord = dateList.find((rec) => {
+                const recEmpId =
+                  rec.userId?._id ||
+                  rec.userId?.id ||
+                  rec.userId ||
+                  rec.employeeId?._id ||
+                  rec.employeeId;
+                return (
+                  String(recEmpId) === String(employeeId) &&
+                  isSameDate(rec.date, rec.checkInTime, date)
+                );
+              });
+            }
+          } catch (dErr) {
+            console.warn("Date fetch error:", dErr);
+          }
+        }
+
+        if (matchedRecord) {
+          const checkin = formatTimeToHHMM(matchedRecord.checkInTime || matchedRecord.checkin);
+          const breakStart = formatTimeToHHMM(
+            matchedRecord.breaks?.[0]?.startTime || matchedRecord.breakStart
+          );
+          const breakEnd = formatTimeToHHMM(
+            matchedRecord.breaks?.[0]?.endTime || matchedRecord.breakEnd
+          );
+          const checkout = formatTimeToHHMM(matchedRecord.checkOutTime || matchedRecord.checkout);
+
+          const hasSecondBreak = matchedRecord.breaks && matchedRecord.breaks.length > 1;
+
+          const newSessions = [
+            {
+              checkin,
+              breakStart,
+              breakEnd,
+              checkout: hasSecondBreak ? "" : checkout,
+            },
+          ];
+
+          if (hasSecondBreak) {
+            newSessions.push({
+              checkin: "",
+              breakStart: formatTimeToHHMM(matchedRecord.breaks[1]?.startTime),
+              breakEnd: formatTimeToHHMM(matchedRecord.breaks[1]?.endTime),
+              checkout,
+            });
+          }
+
+          setFormData((prev) => ({
+            ...prev,
+            sessions: newSessions,
+          }));
+
+          setSessionCount(newSessions.length);
+
+          setSelectedFields(
+            newSessions.map((s) => ({
+              checkin: Boolean(s.checkin),
+              breakStart: Boolean(s.breakStart),
+              breakEnd: Boolean(s.breakEnd),
+              checkout: Boolean(s.checkout),
+            }))
+          );
+        } else {
+          setFormData((prev) => ({
+            ...prev,
+            sessions: [{ ...emptySession }],
+          }));
+          setSessionCount(1);
+          setSelectedFields([
+            {
+              checkin: false,
+              breakStart: false,
+              breakEnd: false,
+              checkout: false,
+            },
+          ]);
+        }
+      } catch (err) {
+        console.error("Auto populate attendance error:", err);
+      }
+    };
+
+    autoPopulateAttendance();
+  }, [formData.employeeId, formData.date, editMode]);
+
+  // ============================================================
   // EMPLOYEE
   // ============================================================
 
