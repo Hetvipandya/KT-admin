@@ -113,6 +113,21 @@ const formatRole = (role) => {
   return role || "Unknown";
 };
 
+const formatDuration = (leave) => {
+  const rawLeave = leave?.rawLeave || leave || {};
+  const totalDays = Number(rawLeave?.totalDays ?? leave?.totalDays ?? 0);
+  const isHalf = rawLeave?.isHalfDay || leave?.isHalfDay || totalDays === 0.5;
+  const halfType = rawLeave?.halfDayType || leave?.halfDayType;
+
+  if (isHalf) {
+    if (halfType === "first-half") return "0.5 Day (First Half)";
+    if (halfType === "second-half") return "0.5 Day (Second Half)";
+    return "0.5 Day (Half Day)";
+  }
+
+  return `${totalDays} ${totalDays === 1 ? "Day" : "Days"}`;
+};
+
 const getEmployeeId = (employee) => {
   if (!employee) return "";
 
@@ -1552,7 +1567,7 @@ export default function LeaveRequest() {
                       </th>
 
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
-                        Approver Reason
+                        Approve / Reject Reason
                       </th>
                     </tr>
                   </thead>
@@ -1617,10 +1632,7 @@ export default function LeaveRequest() {
                           </td>
 
                           <td className="px-4 py-4 font-semibold text-gray-800">
-                            {request.totalDays}{" "}
-                            {request.totalDays === 1
-                              ? "Day"
-                              : "Days"}
+                            {formatDuration(request)}
                           </td>
 
                           <td className="px-4 py-4 whitespace-nowrap text-xs text-gray-600">
@@ -1805,10 +1817,7 @@ export default function LeaveRequest() {
                           </p>
 
                           <p className="text-xs font-semibold text-gray-700 mt-1">
-                            {request.totalDays}{" "}
-                            {request.totalDays === 1
-                              ? "Day"
-                              : "Days"}
+                            {formatDuration(request)}
                           </p>
                         </div>
                       </div>
@@ -1884,7 +1893,7 @@ export default function LeaveRequest() {
                       {(request.teamLeadRemark || request.hrRemark || request.adminRemark || request.remark || request.description) && (
                         <div className="mt-2.5 pt-2 border-t border-gray-100 space-y-1 text-xs">
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                            Approver Remarks
+                            Approve / Reject Reason
                           </p>
                           {request.teamLeadRemark && (
                             <p className="text-xs text-gray-600">
@@ -2052,10 +2061,7 @@ export default function LeaveRequest() {
                   </div>
 
                   <p className="text-sm font-bold text-gray-800">
-                    {selectedLeave.totalDays}{" "}
-                    {selectedLeave.totalDays === 1
-                      ? "Day"
-                      : "Days"}
+                    {formatDuration(selectedLeave)}
                   </p>
                 </div>
 
