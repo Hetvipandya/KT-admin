@@ -1038,7 +1038,8 @@ const getDesignation = (lead) => {
             <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
               <p className="text-sm text-orange-600 font-medium">Total Members</p>
               <p className="text-2xl font-bold text-orange-900">
-                {Object.values(assignedInterns).reduce((acc, curr) => acc + curr.length, 0) +
+                {teamLeads.length +
+                 Object.values(assignedInterns).reduce((acc, curr) => acc + curr.length, 0) +
                  Object.values(assignedEmployees).reduce((acc, curr) => acc + curr.length, 0)}
               </p>
             </div>
