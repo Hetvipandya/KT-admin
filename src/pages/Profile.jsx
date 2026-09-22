@@ -139,21 +139,17 @@ export default function Profile() {
           ? "http://localhost:5000"
           : "https://kt-backend-1.onrender.com");
 
-      // Use PUT /api/users/reset-password for resetting password
-      const response = await fetch(`${API_BASE}/api/users/reset-password`, {
-        method: "PUT",
+      // Change Password API for logged-in user
+      const response = await fetch(`${API_BASE}/api/users/change-password`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          token: token || undefined,
-          email: userEmail || undefined,
           userId: userId || undefined,
           oldPassword: passwordData.oldPassword,
-          currentPassword: passwordData.oldPassword,
           newPassword: passwordData.newPassword,
-          password: passwordData.newPassword,
         }),
       });
 
