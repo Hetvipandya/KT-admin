@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MapPin, Phone } from 'lucide-react';
 
 export default function Profile() {
   // Admin account structure matching your setup
@@ -55,14 +56,20 @@ export default function Profile() {
           </div>
 
           <div className="mt-5 pt-4 border-t border-gray-300 w-full text-xs text-gray-500 space-y-2 text-left">
-            <p>📍 Location: <span className="text-gray-800 font-medium">{adminData.location}</span></p>
-            <p>📞 Phone: <span className="text-gray-800 font-medium">
-              {adminData.phone && adminData.phone.map((p, i) => (
-                <span key={p}>
-                  <a href={`tel:${p.replace(/\s+/g, '')}`} className="text-gray-800 underline">{p}</a>{i < adminData.phone.length - 1 ? ', ' : ''}
-                </span>
-              ))}
-            </span></p>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
+              <span>Location: <span className="text-gray-800 font-medium">{adminData.location}</span></span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Phone className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
+              <span>Phone: <span className="text-gray-800 font-medium">
+                {adminData.phone && adminData.phone.map((p, i) => (
+                  <span key={p}>
+                    <a href={`tel:${p.replace(/\s+/g, '')}`} className="text-gray-800 underline hover:text-blue-600">{p}</a>{i < adminData.phone.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </span></span>
+            </div>
           </div>
         </div>
 
