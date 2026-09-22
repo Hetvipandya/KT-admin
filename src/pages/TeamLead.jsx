@@ -755,15 +755,38 @@ const getDesignation = (lead) => {
         teamLeadsData = [];
       }
 
-      // Filter out admin users from team leads
+      // Filter out admin users and deleted / invalid / unnamed team leads
       const filteredTeamLeads = teamLeadsData.filter((lead) => {
+        if (!lead) return false;
+
         const role = 
           lead?.teamLead?.role?.toLowerCase().trim() ||
           lead?.role?.toLowerCase().trim() ||
           lead?.user?.role?.toLowerCase().trim() ||
           lead?.teamLead?.user?.role?.toLowerCase().trim() ||
           '';
-        return role !== 'admin';
+        if (role === 'admin') return false;
+
+        const leadName = getUserName(lead);
+        const leadEmail = getUserEmail(lead);
+
+        // If user was deleted or no valid name/email exists in DB
+        if (
+          !leadName ||
+          leadName === "Unnamed" ||
+          leadName === "No Name" ||
+          leadName === "Unknown Employee" ||
+          leadName === "Unknown User" ||
+          leadName === "N/A"
+        ) {
+          return false;
+        }
+
+        if (!leadEmail || leadEmail === "N/A" || !leadEmail.includes("@")) {
+          return false;
+        }
+
+        return true;
       });
 
       const processedTeamLeads = filteredTeamLeads.map((lead) => {
@@ -846,6 +869,9 @@ const getDesignation = (lead) => {
       const usersResponse = await axios.get(`${BASE_URL}/users/all`, { headers });
       const allUsers = usersResponse?.data?.users || [];
       const internUsers = allUsers.filter((user) => {
+        if (!user) return false;
+        const name = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        if (!name || name === "Unnamed" || name === "No Name" || name === "Unknown Employee" || name === "Unknown User") return false;
         return user.role?.toLowerCase().trim() === "intern";
       });
       setInterns(internUsers);
@@ -859,7 +885,13 @@ const getDesignation = (lead) => {
     try {
       const employeesResponse = await axios.get(`${BASE_URL}/employee/list`, { headers });
       const allEmployees = employeesResponse?.data?.employees || [];
-      setEmployees(Array.isArray(allEmployees) ? allEmployees : []);
+      const validEmployees = (Array.isArray(allEmployees) ? allEmployees : []).filter((emp) => {
+        if (!emp) return false;
+        const name = emp.name || emp.fullName || `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+        if (!name || name === "Unnamed" || name === "No Name" || name === "Unknown Employee" || name === "Unknown User") return false;
+        return true;
+      });
+      setEmployees(validEmployees);
     } catch (error) {
       console.log("Could not fetch employees:", error);
       setEmployees([]);

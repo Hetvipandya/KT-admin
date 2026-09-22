@@ -391,6 +391,7 @@ const fetchAllMembers = async () => {
     // ==========================================
     const allMembers = usersList
       .filter((user) => {
+        if (!user) return false;
         const role = String(
           user?.role ||
           user?.userRole ||
@@ -399,7 +400,26 @@ const fetchAllMembers = async () => {
           .toLowerCase()
           .trim();
 
-        return role && role !== 'admin';
+        if (!role || role === 'admin') return false;
+
+        const name = user.name || user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+        const email = user.email || '';
+        if (
+          !name ||
+          name === "Unnamed" ||
+          name === "No Name" ||
+          name === "Unknown Employee" ||
+          name === "Unknown User" ||
+          name === "N/A"
+        ) {
+          return false;
+        }
+
+        if (!email || email === "N/A" || !email.includes("@")) {
+          return false;
+        }
+
+        return true;
       })
       .map((user, index) => {
 

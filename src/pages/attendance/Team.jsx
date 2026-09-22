@@ -444,12 +444,23 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
             [lead?.user?.firstName, lead?.user?.lastName].filter(Boolean).join(" ") ||
             "";
 
-          if (!leadId) return null;
+          if (
+            !leadId ||
+            !name ||
+            name === "Unnamed" ||
+            name === "No Name" ||
+            name === "Unknown Employee" ||
+            name === "Unknown User" ||
+            name === "N/A" ||
+            name === "Team Lead"
+          ) {
+            return null;
+          }
 
           return {
             _id: String(leadId),
             value: String(leadId),
-            name: name || "Team Lead",
+            name: name,
             interns: Array.isArray(interns) ? interns : [],
             employees: Array.isArray(employees) ? employees : [],
           };
