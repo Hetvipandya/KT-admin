@@ -310,7 +310,41 @@ export default function LeaveRequest() {
         leaveArray = responseData.result;
       }
 
-      const normalized = leaveArray.map((leave, index) => {
+      const normalized = leaveArray
+        .filter((leave) => {
+          if (!leave) return false;
+
+          const employee =
+            leave?.employeeId && typeof leave.employeeId === "object"
+              ? leave.employeeId
+              : leave?.employee || leave?.user || leave?.userId;
+
+          if (!employee || Object.keys(employee).length === 0) {
+            const fallbackName = leave?.name || leave?.employeeName;
+            if (
+              !fallbackName ||
+              fallbackName === "Unknown Employee" ||
+              fallbackName === "Unknown User" ||
+              fallbackName === "Unknown"
+            ) {
+              return false;
+            }
+          }
+
+          const employeeName = getEmployeeName(employee, leave);
+
+          if (
+            !employeeName ||
+            employeeName === "Unknown Employee" ||
+            employeeName === "Unknown User" ||
+            employeeName === "Unknown"
+          ) {
+            return false;
+          }
+
+          return true;
+        })
+        .map((leave, index) => {
         const employee =
           leave?.employeeId &&
           typeof leave.employeeId === "object"

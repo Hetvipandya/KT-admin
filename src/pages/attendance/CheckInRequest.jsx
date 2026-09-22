@@ -265,9 +265,25 @@ export default function CheckInRequest() {
 
       const normalized = normalizeRequests(data);
 
-      const mappedRequests = normalized.map(
-        mapRequest
-      );
+      const mappedRequests = normalized
+        .filter((item) => {
+          if (!item) return false;
+          const name =
+            item.employeeName ||
+            item.name ||
+            item.userId?.name ||
+            item.employee?.name;
+          if (
+            !name ||
+            name === "Unknown Employee" ||
+            name === "Unknown User" ||
+            name === "Unknown"
+          ) {
+            return false;
+          }
+          return true;
+        })
+        .map(mapRequest);
 
       // ========================================================
       // Preserve already processed requests

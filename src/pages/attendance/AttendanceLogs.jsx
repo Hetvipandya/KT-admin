@@ -564,34 +564,75 @@ const calculateAttendanceProgress = (
     }
   };
 
+  const MAX_ALLOWED_BREAK_MINUTES = 60; // 1 Hour Allowed Break
+  let accumulatedBreakMinutes = 0;
+
   normalizedBreaks.forEach((breakItem) => {
+    const breakStart = breakItem.start;
     const breakEnd = Math.min(
       breakItem.end ?? activeEnd,
       activeEnd
     );
 
-    if (breakItem.start > currentTime) {
+    if (breakStart > currentTime) {
       addSegment(
         currentTime,
-        breakItem.start,
+        breakStart,
         'blue',
         'Working',
         currentTime === checkInMinutes
           ? formatTime(checkIn)
           : formatMinutes(currentTime),
-        formatMinutes(breakItem.start)
+        formatMinutes(breakStart)
       );
     }
 
-    if (breakEnd > breakItem.start) {
-      addSegment(
-        breakItem.start,
-        breakEnd,
-        'yellow',
-        'Break',
-        formatMinutes(breakItem.start),
-        formatMinutes(breakEnd)
-      );
+    if (breakEnd > breakStart) {
+      const breakDuration = breakEnd - breakStart;
+      const availableAllowance = Math.max(0, MAX_ALLOWED_BREAK_MINUTES - accumulatedBreakMinutes);
+
+      if (availableAllowance >= breakDuration) {
+        // Entire break is within the 1-hour allowance
+        addSegment(
+          breakStart,
+          breakEnd,
+          'yellow',
+          'Break',
+          formatMinutes(breakStart),
+          formatMinutes(breakEnd)
+        );
+      } else if (availableAllowance > 0) {
+        // Break starts within allowance and exceeds 1 hour
+        const splitTime = breakStart + availableAllowance;
+        addSegment(
+          breakStart,
+          splitTime,
+          'yellow',
+          'Break',
+          formatMinutes(breakStart),
+          formatMinutes(splitTime)
+        );
+        addSegment(
+          splitTime,
+          breakEnd,
+          'gray',
+          'Idle',
+          formatMinutes(splitTime),
+          formatMinutes(breakEnd)
+        );
+      } else {
+        // 1-hour allowance is already exhausted; entire duration is Idle
+        addSegment(
+          breakStart,
+          breakEnd,
+          'gray',
+          'Idle',
+          formatMinutes(breakStart),
+          formatMinutes(breakEnd)
+        );
+      }
+
+      accumulatedBreakMinutes += breakDuration;
       currentTime = breakEnd;
     }
   });
@@ -825,6 +866,13 @@ const AttendanceTimeline = ({
           <span className="flex items-center gap-1.5">
             <Coffee className="h-3.5 w-3.5 text-amber-600" />
             Break
+          </span>
+        )}
+
+        {segments.some((s) => s.color === 'gray') && (
+          <span className="flex items-center gap-1.5">
+            <PauseCircle className="h-3.5 w-3.5 text-gray-500" />
+            Idle
           </span>
         )}
 
@@ -2295,7 +2343,7 @@ export default function AttendanceLogs() {
                       {segments.map((segment, index) => (
                         <div key={`${segment.label}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs sm:px-4">
                           <div className="flex items-center gap-2">
-                            <span className={`h-2.5 w-2.5 rounded-full ${segment.color === 'yellow' ? 'bg-yellow-400' : 'bg-blue-500'}`} />
+                            <span className={`h-2.5 w-2.5 rounded-full ${segment.color === 'yellow' ? 'bg-yellow-400' : segment.color === 'gray' ? 'bg-gray-400' : 'bg-blue-500'}`} />
                             <span className="font-medium text-gray-700">{segment.label}</span>
                           </div>
                           <span className="text-gray-500">

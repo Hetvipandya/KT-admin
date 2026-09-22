@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { 
   Plus, 
@@ -19,7 +19,9 @@ import {
   BarChart3,
   Target,
   ListTodo,
-  MessageSquare
+  MessageSquare,
+  Check,
+  Search
 } from "lucide-react";
 import { useConfirm } from "../../components/common/ConfirmDialog";
 
@@ -44,6 +46,210 @@ const TASK_URL =
 
 const TEAM_LEAD_URL =
   "https://kt-backend-1.onrender.com/api/teamLead/team";
+
+function MultiSelectDropdown({
+  label,
+  options = [],
+  selectedValues = [],
+  onChange,
+  placeholder = "Select...",
+  icon: Icon,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(
+    (opt) =>
+      (opt.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (opt.subText || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const toggleOption = (id) => {
+    const normalized = String(id);
+    if (selectedValues.includes(normalized)) {
+      onChange(selectedValues.filter((v) => v !== normalized));
+    } else {
+      onChange([...selectedValues, normalized]);
+    }
+  };
+
+  const removeOption = (e, id) => {
+    e.stopPropagation();
+    onChange(selectedValues.filter((v) => v !== String(id)));
+  };
+
+  const handleSelectAll = (e) => {
+    e.stopPropagation();
+    const allIds = options.map((o) => String(o.id));
+    onChange(allIds);
+  };
+
+  const handleClearAll = (e) => {
+    e.stopPropagation();
+    onChange([]);
+  };
+
+  const selectedOptions = options.filter((opt) =>
+    selectedValues.includes(String(opt.id))
+  );
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div className="flex items-center justify-between mb-1 min-h-[22px]">
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+          {Icon && <Icon className="w-4 h-4 text-gray-500" />}
+          {label}
+        </label>
+        {selectedValues.length > 0 && (
+          <span className="text-[11px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-100">
+            {selectedValues.length} selected
+          </span>
+        )}
+      </div>
+
+      {/* Trigger Box - Fixed uniform height h-[42px] matching Team Lead */}
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className={`h-[42px] w-full border rounded-lg px-3 py-2 bg-white flex items-center justify-between gap-1.5 cursor-pointer shadow-sm transition-all text-sm select-none ${
+          isOpen
+            ? "border-blue-500 ring-2 ring-blue-100"
+            : "border-gray-300 hover:border-gray-400"
+        }`}
+      >
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+          {selectedOptions.length === 0 ? (
+            <span className="text-gray-400 text-sm truncate">{placeholder}</span>
+          ) : selectedOptions.length === 1 ? (
+            <span className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-md truncate max-w-full">
+              <span className="truncate">{selectedOptions[0].name}</span>
+              <button
+                type="button"
+                onClick={(e) => removeOption(e, selectedOptions[0].id)}
+                className="hover:bg-blue-200 p-0.5 rounded text-blue-600 hover:text-blue-900 ml-0.5"
+                title="Remove"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ) : (
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              <span className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-md flex-shrink-0 max-w-[130px]">
+                <span className="truncate">{selectedOptions[0].name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => removeOption(e, selectedOptions[0].id)}
+                  className="hover:bg-blue-200 p-0.5 rounded text-blue-600 hover:text-blue-900 ml-0.5"
+                  title="Remove"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+              <span className="bg-blue-100/70 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap">
+                +{selectedOptions.length - 1} more
+              </span>
+            </div>
+          )}
+        </div>
+
+        <ChevronDown
+          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
+            isOpen ? "rotate-180 text-blue-600" : ""
+          }`}
+        />
+      </div>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 flex flex-col overflow-hidden">
+          {/* Search + Quick Actions */}
+          <div className="p-2 border-b border-gray-100 bg-gray-50/80">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+              />
+            </div>
+            <div className="flex items-center justify-between mt-1.5 px-1">
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold"
+              >
+                Select All ({options.length})
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="text-[11px] text-gray-500 hover:text-gray-700 font-medium"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          {/* Options List */}
+          <div className="overflow-y-auto max-h-48 p-1 space-y-0.5">
+            {filteredOptions.length === 0 ? (
+              <div className="p-3 text-center text-xs text-gray-400">
+                No members found
+              </div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = selectedValues.includes(String(opt.id));
+                return (
+                  <div
+                    key={opt.id}
+                    onClick={() => toggleOption(opt.id)}
+                    className={`flex items-center gap-2.5 px-2.5 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
+                      isSelected
+                        ? "bg-blue-50 text-blue-900 font-medium"
+                        : "hover:bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0 ${
+                        isSelected
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "border-gray-300 bg-white"
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate">{opt.name}</p>
+                      {opt.subText && (
+                        <p className="text-[10px] text-gray-400 truncate">
+                          {opt.subText}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Team() {
   const { confirm, confirmationDialog } = useConfirm();
@@ -84,9 +290,9 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     endDate: "",
     priority: "medium",
     status: "pending",
-    assignedEmployee: "",
+    assignedEmployees: [],
     assignedTL: "",
-    assignedIntern: "",
+    assignedInterns: [],
   });
 
   const defaultProjectForm = {
@@ -99,9 +305,9 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     endDate: "",
     priority: "medium",
     status: "pending",
-    assignedEmployee: "",
+    assignedEmployees: [],
     assignedTL: "",
-    assignedIntern: "",
+    assignedInterns: [],
   };
 
   const [milestoneForm, setMilestoneForm] = useState({
@@ -889,32 +1095,10 @@ const fetchTasks = async (projectId = null) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    let nextForm = {
-      ...projectForm,
+    setProjectForm((prev) => ({
+      ...prev,
       [name]: value,
-    };
-
-    if (name === "assignedTL") {
-      const selectedLead = teamLeadOptions.find(
-        (item) => (item.value || item._id) === String(value)
-      );
-
-      if (selectedLead) {
-        const firstIntern = selectedLead.interns?.[0] || null;
-        const firstInternId =
-          firstIntern?._id || firstIntern?.id || firstIntern?.employeeId || firstIntern?.userId || "";
-        nextForm.assignedIntern = firstInternId ? String(firstInternId) : "";
-        const firstEmployee = selectedLead.employees?.[0] || null;
-        const firstEmployeeId =
-          firstEmployee?._id || firstEmployee?.id || firstEmployee?.employeeId || firstEmployee?.userId || "";
-        nextForm.assignedEmployee = firstEmployeeId ? String(firstEmployeeId) : nextForm.assignedEmployee || "";
-      } else {
-        nextForm.assignedIntern = "";
-        nextForm.assignedEmployee = "";
-      }
-    }
-
-    setProjectForm(nextForm);
+    }));
   };
 
   const getProjectParticipants = (task) => {
@@ -1231,6 +1415,21 @@ const fetchTasks = async (projectId = null) => {
     setSelectedProject(project);
     updateProjectTeamMembers(project);
 
+    const empList = Array.isArray(project?.employees)
+      ? project.employees.map(normalizeId).filter(Boolean)
+      : project?.employees
+        ? [normalizeId(project.employees)].filter(Boolean)
+        : [];
+
+    const internList = Array.isArray(project?.interns)
+      ? project.interns.map(normalizeId).filter(Boolean)
+      : project?.interns
+        ? [normalizeId(project.interns)].filter(Boolean)
+        : [];
+
+    const tlId =
+      normalizeId(project?.teamLeadUser || project?.teamLeadEmployee) || "";
+
     setProjectForm({
       projectName: project?.projectName || "",
       projectDescription: project?.projectDescription || "",
@@ -1241,16 +1440,9 @@ const fetchTasks = async (projectId = null) => {
       endDate: project?.endDate ? String(project.endDate).split("T")[0] : "",
       priority: project?.priority || "medium",
       status: project?.status || "pending",
-      assignedEmployee:
-        Array.isArray(project?.employees) && project.employees.length
-          ? normalizeId(project.employees[0])
-          : "",
-      assignedTL:
-        normalizeId(project?.teamLeadUser || project?.teamLeadEmployee) || "",
-      assignedIntern:
-        Array.isArray(project?.interns) && project.interns.length
-          ? normalizeId(project.interns[0])
-          : "",
+      assignedEmployees: empList,
+      assignedTL: tlId,
+      assignedInterns: internList,
     });
 
     setShowProjectModal(true);
@@ -1276,9 +1468,9 @@ const fetchTasks = async (projectId = null) => {
         endDate: projectForm.endDate || null,
         priority: projectForm.priority || "medium",
         status: projectForm.status || "pending",
-        employees: projectForm.assignedEmployee ? [projectForm.assignedEmployee] : [],
+        employees: Array.isArray(projectForm.assignedEmployees) ? projectForm.assignedEmployees : [],
         teamLeadUser: projectForm.assignedTL || null,
-        interns: projectForm.assignedIntern ? [projectForm.assignedIntern] : [],
+        interns: Array.isArray(projectForm.assignedInterns) ? projectForm.assignedInterns : [],
       };
 
       if (!projectForm.projectName.trim()) {
@@ -1288,6 +1480,11 @@ const fetchTasks = async (projectId = null) => {
 
       if (!projectForm.clientName.trim()) {
         alert("Please enter client name.");
+        return;
+      }
+
+      if (!projectForm.assignedTL) {
+        alert("Please select a team lead.");
         return;
       }
 
@@ -1981,145 +2178,146 @@ const fetchTasks = async (projectId = null) => {
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-gray-800">Project Team</h3>
                   {selectedProject && (
-                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full font-medium">
                       Editing existing project
                     </span>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Team Lead */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Team Lead
-                    </label>
-                    <select
-                      name="assignedTL"
-                      value={projectForm.assignedTL}
-                      onChange={handleChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select Team Lead</option>
-                      {(teamLeadOptions.length > 0
-                        ? teamLeadOptions
-                        : users.filter((user) => {
-                            const role = String(user.role || user.userRole || "")
-                              .trim()
-                              .toLowerCase();
-                            return (
-                              role === "team lead" ||
-                              role === "tl" ||
-                              role === "teamlead"
-                            );
-                          })
-                      ).map((item) => (
-                        <option
-                          key={item.value || item._id || item.id}
-                          value={item.value || item._id || item.id}
-                        >
-                          {item.name || getUserName(item)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {(() => {
+                  // Compute options for TL, Employees, and Interns
+                  const tlMap = new Map();
+                  if (teamLeadOptions.length > 0) {
+                    teamLeadOptions.forEach((lead) => {
+                      const id = String(lead.value || lead._id || lead.id || "");
+                      if (!id) return;
+                      if (!tlMap.has(id)) {
+                        tlMap.set(id, { id, name: lead.name || "Team Lead" });
+                      }
+                    });
+                  }
+                  users.forEach((user) => {
+                    const role = String(user.role || user.userRole || "").trim().toLowerCase();
+                    if (role === "team lead" || role === "tl" || role === "teamlead") {
+                      const id = normalizeId(user);
+                      if (!id) return;
+                      if (!tlMap.has(id)) {
+                        tlMap.set(id, { id, name: getUserName(user) || "Team Lead" });
+                      }
+                    }
+                  });
+                  const allTLs = Array.from(tlMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-                  {/* Employee */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Employee
-                    </label>
-                    {(() => {
-                      const selectedLead = teamLeadOptions.find(
-                        (item) =>
-                          String(item.value || item._id) ===
-                          String(projectForm.assignedTL)
-                      );
+                  const empMap = new Map();
+                  employees.forEach((emp) => {
+                    const id = normalizeId(emp);
+                    if (!id) return;
+                    const name = getEmployeeName(emp);
+                    const email = emp.email || emp.user?.email || "";
+                    const designation = emp.designation || emp.jobTitle || emp.role || "";
+                    if (!empMap.has(id)) {
+                      empMap.set(id, {
+                        id,
+                        name: name || "Employee",
+                        subText: designation || email || "Employee",
+                      });
+                    }
+                  });
+                  users.forEach((user) => {
+                    const role = String(user.role || user.userRole || "").trim().toLowerCase();
+                    if (role === "employee" || role === "staff") {
+                      const id = normalizeId(user);
+                      if (!id) return;
+                      if (!empMap.has(id)) {
+                        empMap.set(id, {
+                          id,
+                          name: getUserName(user) || "Employee",
+                          subText: user.email || "Employee",
+                        });
+                      }
+                    }
+                  });
+                  const allEmps = Array.from(empMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-                      const employeeOptions =
-                        selectedLead &&
-                        Array.isArray(selectedLead.employees) &&
-                        selectedLead.employees.length > 0
-                          ? selectedLead.employees
-                          : employees;
+                  const internMap = new Map();
+                  users.forEach((user) => {
+                    const role = String(user.role || user.userRole || "").trim().toLowerCase();
+                    if (role.includes("intern")) {
+                      const id = normalizeId(user);
+                      if (!id) return;
+                      if (!internMap.has(id)) {
+                        internMap.set(id, {
+                          id,
+                          name: getUserName(user) || "Intern",
+                          subText: user.email || "Intern",
+                        });
+                      }
+                    }
+                  });
+                  const allInterns = Array.from(internMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-                      return (
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Team Lead */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1 min-h-[22px]">
+                          <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                            <Users className="w-4 h-4 text-gray-500" />
+                            Team Lead *
+                          </label>
+                        </div>
                         <select
-                          name="assignedEmployee"
-                          value={projectForm.assignedEmployee}
+                          name="assignedTL"
+                          value={projectForm.assignedTL}
                           onChange={handleChange}
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full h-[42px] border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm text-sm"
+                          required
                         >
-                          <option value="">Select Employee</option>
-                          {employeeOptions.map((emp) => (
-                            <option
-                              key={emp._id || emp.id || emp.employeeId || emp.userId || emp}
-                              value={
-                                emp._id ||
-                                emp.id ||
-                                emp.employeeId ||
-                                emp.userId ||
-                                emp
-                              }
-                            >
-                              {getEmployeeName(emp)}
+                          <option value="">Select Team Lead</option>
+                          {allTLs.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
                             </option>
                           ))}
                         </select>
-                      );
-                    })()}
-                  </div>
+                      </div>
 
-                  {/* Intern */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Intern
-                    </label>
-                    {(() => {
-                      const selectedLead = teamLeadOptions.find(
-                        (item) =>
-                          String(item.value || item._id) ===
-                          String(projectForm.assignedTL)
-                      );
+                      {/* Multiple Employees */}
+                      <div>
+                        <MultiSelectDropdown
+                          label="Employees"
+                          icon={User}
+                          placeholder="Select Employees..."
+                          options={allEmps}
+                          selectedValues={projectForm.assignedEmployees || []}
+                          onChange={(newValues) =>
+                            setProjectForm((prev) => ({
+                              ...prev,
+                              assignedEmployees: newValues,
+                            }))
+                          }
+                        />
+                      </div>
 
-                      const internOptions =
-                        selectedLead &&
-                        Array.isArray(selectedLead.interns) &&
-                        selectedLead.interns.length > 0
-                          ? selectedLead.interns
-                          : users.filter((user) =>
-                              String(user.role || user.userRole || "")
-                                .trim()
-                                .toLowerCase()
-                                .includes("intern")
-                            );
-
-                      return (
-                        <select
-                          name="assignedIntern"
-                          value={projectForm.assignedIntern}
-                          onChange={handleChange}
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Select Intern</option>
-                          {internOptions.map((user) => (
-                            <option
-                              key={user._id || user.id || user.employeeId || user.userId || user}
-                              value={
-                                user._id ||
-                                user.id ||
-                                user.employeeId ||
-                                user.userId ||
-                                user
-                              }
-                            >
-                              {getUserName(user)}
-                            </option>
-                          ))}
-                        </select>
-                      );
-                    })()}
-                  </div>
-                </div>
+                      {/* Multiple Interns */}
+                      <div>
+                        <MultiSelectDropdown
+                          label="Interns"
+                          icon={User}
+                          placeholder="Select Interns..."
+                          options={allInterns}
+                          selectedValues={projectForm.assignedInterns || []}
+                          onChange={(newValues) =>
+                            setProjectForm((prev) => ({
+                              ...prev,
+                              assignedInterns: newValues,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Buttons */}
