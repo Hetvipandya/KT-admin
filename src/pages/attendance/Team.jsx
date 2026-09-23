@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { 
   Plus, 
@@ -11,17 +11,19 @@ import {
   User,
   Users, 
   CheckCircle,
+  CheckCircle2,
   AlertCircle,
   Loader2,
   X,
   FolderOpen,
-  FileText,
-  BarChart3,
-  Target,
   ListTodo,
   MessageSquare,
   Check,
-  Search
+  Search,
+  Filter,
+  Sparkles,
+  DollarSign,
+  Layers
 } from "lucide-react";
 import { useConfirm } from "../../components/common/ConfirmDialog";
 
@@ -36,12 +38,10 @@ const EMPLOYEE_URL =
 const USER_URL =
   "https://kt-backend-1.onrender.com/api/users/all";
 
-const MILESTONE_BASE_URL =
-  "https://kt-backend-1.onrender.com/api/projectManage/milestones";
-
-const MILESTONE_URL = `${MILESTONE_BASE_URL}/all`;
-
 const TASK_URL =
+  "https://kt-backend-1.onrender.com/api/task";
+
+const TASK_PROJECT_MANAGE_URL =
   "https://kt-backend-1.onrender.com/api/projectManage/task";
 
 const TEAM_LEAD_URL =
@@ -256,23 +256,24 @@ export default function Team() {
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [selectedMilestone, setSelectedMilestone] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showProjectModal, setShowProjectModal] = useState(false);
-  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [users, setUsers] = useState([]);
   const [teamLeadOptions, setTeamLeadOptions] = useState([]);
-  const [milestones, setMilestones] = useState([]);
-  const [projectMilestones, setProjectMilestones] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [expandedProjects, setExpandedProjects] = useState({});
-  const [expandedMilestones, setExpandedMilestones] = useState({});
   
   // State for daily updates
   const [taskUpdatesById, setTaskUpdatesById] = useState({});
   const [loadingTaskUpdates, setLoadingTaskUpdates] = useState({});
   const [selectedReportMemberByTask, setSelectedReportMemberByTask] = useState({});
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
   
 const [projectTeamMembers, setProjectTeamMembers] = useState({
   tl: null,
@@ -310,20 +311,8 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     assignedInterns: [],
   };
 
-  const [milestoneForm, setMilestoneForm] = useState({
-    projectId: "",
-    title: "",
-    description: "",
-    dueDate: "",
-    progress: 0,
-    status: "in-progress",
-    reviewComment: "",
-    completedAt: "",
-  });
-
   const [taskForm, setTaskForm] = useState({
     projectId: "",
-    milestoneId: "",
     taskTitle: "",
     description: "",
     assignedTo: "",
@@ -341,7 +330,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     fetchEmployees();
     fetchUsers();
     fetchTeamLeadOptions();
-    fetchMilestones();
     fetchTasks();
   }, []);
 
@@ -372,6 +360,55 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
       alert("Failed to load task updates.");
     } finally {
       setLoadingTaskUpdates((prev) => ({ ...prev, [taskId]: false }));
+    }
+  };
+
+  const fetchTasks = async (projectId = null) => {
+    try {
+      let taskData = [];
+
+      // 1. Try primary TASK_URL (/api/task/all)
+      try {
+        const res = await axios.get(`${TASK_URL}/all`);
+        const payload = res.data;
+        if (Array.isArray(payload)) {
+          taskData = payload;
+        } else if (Array.isArray(payload?.data)) {
+          taskData = payload.data;
+        } else if (Array.isArray(payload?.tasks)) {
+          taskData = payload.tasks;
+        }
+      } catch (err1) {
+        console.warn("Primary task fetch (/api/task/all) error, trying fallback:", err1.message);
+      }
+
+      // 2. If empty or failed, try fallback TASK_PROJECT_MANAGE_URL
+      if (taskData.length === 0) {
+        try {
+          const fetchUrl = projectId
+            ? `${TASK_PROJECT_MANAGE_URL}/project/${projectId}`
+            : `${TASK_PROJECT_MANAGE_URL}/all`;
+          const res2 = await axios.get(fetchUrl);
+          const payload2 = res2.data;
+          if (Array.isArray(payload2)) {
+            taskData = payload2;
+          } else if (Array.isArray(payload2?.data)) {
+            taskData = payload2.data;
+          } else if (Array.isArray(payload2?.tasks)) {
+            taskData = payload2.tasks;
+          }
+        } catch (err2) {
+          // fallback error handled
+        }
+      }
+
+      const sortedTasks = sortTasksByNewest(taskData);
+      setTasks(sortedTasks);
+      return sortedTasks;
+    } catch (error) {
+      console.error("Tasks fetch error:", error?.response?.data || error.message);
+      setTasks([]);
+      return [];
     }
   };
 
@@ -611,111 +648,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   };
 
   const isSameId = (a, b) => normalizeId(a) === normalizeId(b);
-
-  const getMilestoneProjectId = (milestone) => {
-    if (!milestone) return "";
-    if (typeof milestone === "object") {
-      return (
-        milestone?.projectId?._id ||
-        milestone?.projectId ||
-        milestone?.project?._id ||
-        milestone?.project ||
-        ""
-      );
-    }
-    return milestone;
-  };
-
-  const loadSelectedMilestone = async (milestoneId) => {
-    if (!milestoneId) return null;
-
-    let milestoneData = null;
-    try {
-      const response = await axios.get(`${MILESTONE_URL}/${milestoneId}`);
-      milestoneData = response.data?.milestone || response.data?.data || response.data;
-    } catch (error) {
-      console.warn("Milestone fetch warning:", error?.message || error);
-      return null;
-    }
-
-    if (!milestoneData) return null;
-
-    let tasks = [];
-    try {
-      const tasksResponse = await axios.get(`${TASK_URL}/milestone/${milestoneId}`);
-      tasks = tasksResponse.data?.data || tasksResponse.data || [];
-    } catch (error) {
-      tasks = [];
-    }
-
-    return { ...milestoneData, tasks };
-  };
-
-  const handleSelectMilestone = async (milestone) => {
-    if (!milestone) return;
-    const id = milestone._id || milestone.id;
-    const milestoneProjectId = getMilestoneProjectId(milestone);
-
-    setTaskForm((prev) => ({
-      ...prev,
-      milestoneId: id,
-      projectId: milestoneProjectId || prev.projectId,
-    }));
-
-    if (milestoneProjectId) {
-      const project = projects.find((p) => isSameId(p._id || p.id, milestoneProjectId));
-      if (project) {
-        setSelectedProject(project);
-        updateProjectTeamMembers(project);
-      }
-    }
-
-    try {
-      const existingMilestone = milestones.find(m => isSameId(m._id || m.id, id));
-      
-      if (existingMilestone && existingMilestone.tasks) {
-        setSelectedMilestone(existingMilestone);
-        return;
-      }
-      
-      const response = await axios.get(`${MILESTONE_URL}/${id}`);
-      const milestoneData = response.data?.milestone || response.data?.data || response.data;
-      
-      if (milestoneData) {
-        let tasks = [];
-        try {
-          const tasksResponse = await axios.get(`${TASK_URL}/milestone/${id}`);
-          tasks = tasksResponse.data?.data || tasksResponse.data || [];
-        } catch (error) {
-          tasks = [];
-        }
-
-        const milestoneWithTasks = {
-          ...milestoneData,
-          tasks: tasks
-        };
-        
-        setSelectedMilestone(milestoneWithTasks);
-        
-        setMilestones(prev => {
-          const index = prev.findIndex(m => isSameId(m._id || m.id, id));
-          if (index !== -1) {
-            const updated = [...prev];
-            updated[index] = milestoneWithTasks;
-            return updated;
-          }
-          return [milestoneWithTasks, ...prev];
-        });
-      }
-    } catch (error) {
-      console.error('Error loading milestone:', error);
-      const existing = milestones.find(m => isSameId(m._id || m.id, id));
-      if (existing) {
-        setSelectedMilestone(existing);
-      }
-    }
-  };
-
   const sortByNewest = (items = []) => {
     return [...items].sort((a, b) => {
       const aTime = new Date(
@@ -773,112 +705,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     }
   };
 
-  const fetchMilestones = async () => {
-    try {
-      const res = await axios.get(MILESTONE_URL);
-      const milestoneData = res.data?.data || res.data?.milestones || res.data || [];
-      const normalized = Array.isArray(milestoneData) ? milestoneData : [];
-      
-      const milestonesWithTasks = await Promise.all(
-        normalized.map(async (milestone) => {
-          try {
-            const tasksRes = await axios.get(`${TASK_URL}/milestone/${milestone._id}`);
-            return {  
-              ...milestone,
-              tasks: sortTasksByNewest(tasksRes.data?.data || tasksRes.data || [])
-            };
-          } catch (error) {
-            return { 
-              ...milestone,
-              tasks: []
-            };
-          }
-        })
-      );
-      
-      setMilestones(sortByNewest(milestonesWithTasks));
-    } catch (error) {
-      console.error("Milestones fetch error:", error);
-      setMilestones([]);
-    }
-  };
-
-  const fetchMilestonesByProject = async (projectId) => {
-    if (!projectId) {
-      setProjectMilestones([]);
-      return [];
-    }
-
-    try {
-      const res = await axios.get(`${MILESTONE_URL}/project/${projectId}`);
-      const milestoneData = res.data?.data || res.data?.milestones || res.data || [];
-      const normalized = Array.isArray(milestoneData) ? milestoneData : [];
-      const milestonesWithTasks = await Promise.all(
-        normalized.map(async (milestone) => {
-          try {
-            const tasksRes = await axios.get(`${TASK_URL}/milestone/${milestone._id}`);
-            return {
-              ...milestone,
-              tasks: sortTasksByNewest(tasksRes.data?.data || tasksRes.data || [])
-            };
-          } catch (error) {
-            return {
-              ...milestone,
-              tasks: []
-            };
-          }
-        })
-      );
-      setProjectMilestones(sortByNewest(milestonesWithTasks));
-      return milestonesWithTasks;
-    } catch (error) {
-      console.error("Project milestones fetch error:", error);
-      setProjectMilestones([]);
-      return [];
-    }
-  };
-
-const fetchTasks = async (projectId = null) => {
-  try {
-    const url = projectId
-      ? `${TASK_URL}/project/${projectId}`
-      : `${TASK_URL}/all`;
-
-    const res = await axios.get(url);
-
-    console.log("TASK API RESPONSE:", res.data);
-
-    let taskData = [];
-
-    if (Array.isArray(res.data)) {
-      taskData = res.data;
-    } else if (Array.isArray(res.data?.data)) {
-      taskData = res.data.data;
-    } else if (Array.isArray(res.data?.tasks)) {
-      taskData = res.data.tasks;
-    } else if (Array.isArray(res.data?.data?.tasks)) {
-      taskData = res.data.data.tasks;
-    } else if (Array.isArray(res.data?.result)) {
-      taskData = res.data.result;
-    }
-
-    const sortedTasks = sortTasksByNewest(taskData);
-
-    console.log("FINAL TASKS:", sortedTasks);
-
-    setTasks(sortedTasks);
-
-    return sortedTasks;
-  } catch (error) {
-    console.error(
-      "Tasks fetch error:",
-      error?.response?.data || error.message
-    );
-
-    setTasks([]);
-    return [];
-  }
-};
 
   const updateProjectTeamMembers = (project) => {
   if (!project) {
@@ -1055,55 +881,6 @@ const fetchTasks = async (projectId = null) => {
       await fetchTaskUpdates(taskId);
     }
   };
-
-  const getMilestoneTitle = (milestone) => {
-    if (!milestone) return "Untitled Milestone";
-    if (typeof milestone === "string") return milestone;
-
-    const direct = (
-      milestone.title ||
-      milestone.milestoneTitle ||
-      milestone.milestoneName ||
-      milestone.name ||
-      milestone.label ||
-      milestone.heading
-    );
-    if (direct) return direct;
-
-    if (milestone.milestone && typeof milestone.milestone === "object") {
-      return getMilestoneTitle(milestone.milestone);
-    }
-    if (milestone.data && typeof milestone.data === "object") {
-      return getMilestoneTitle(milestone.data);
-    }
-    if (milestone._doc && typeof milestone._doc === "object") {
-      return getMilestoneTitle(milestone._doc);
-    }
-
-    for (const key of Object.keys(milestone)) {
-      const val = milestone[key];
-      if (typeof val === "string" && /title|name|label|heading/i.test(key)) {
-        return val;
-      }
-    }
-
-    return "Untitled Milestone";
-  };
-
-  const getTaskMilestoneId = (task) => {
-    if (!task) return "";
-    if (typeof task === "object") {
-      return (
-        task?.milestoneId?._id ||
-        task?.milestoneId ||
-        task?.milestone?._id ||
-        task?.milestone ||
-        ""
-      );
-    }
-    return task;
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setProjectForm((prev) => ({
@@ -1124,14 +901,6 @@ const fetchTasks = async (projectId = null) => {
 
     return { empNames, internNames, tlName };
   };
-
-  const handleMilestoneChange = (e) => {
-    setMilestoneForm({
-      ...milestoneForm,
-      [e.target.name]: e.target.value,
-    });
-  };
-
   const handleTaskChange = (e) => {
     const { name, value } = e.target;
     
@@ -1148,48 +917,15 @@ const fetchTasks = async (projectId = null) => {
       });
     }
   };
-
-  const openAddMilestone = (projectId = null) => {
-    setMilestoneForm({
-      projectId: projectId || selectedProject?._id || "",
-      title: "",
-      description: "",
-      dueDate: "",
-      progress: 0,
-      status: "in-progress",
-      reviewComment: "",
-      completedAt: "",
-    });
-    setShowMilestoneModal(true);
-  };
-
-  const openAddTask = async (projectId = null, milestoneId = null) => {
-    let visibleMilestones = milestones;
-
-    if (selectedProject || projectId) {
-      const projId = projectId || selectedProject?._id;
-      visibleMilestones = await fetchMilestonesByProject(projId);
-      const proj = projects.find(p => isSameId(p._id, projId));
-      if (proj) {
-        setSelectedProject(proj);
-        updateProjectTeamMembers(proj);
-      }
-    }
-
-    const milestoneToUse = milestoneId 
-      ? visibleMilestones.find(m => isSameId(m._id, milestoneId)) || selectedMilestone
-      : selectedMilestone || null;
-
-    if (milestoneToUse) {
-      const selected = await loadSelectedMilestone(milestoneToUse._id || milestoneToUse.id);
-      setSelectedMilestone(selected || milestoneToUse);
-    } else {
-      setSelectedMilestone(null);
+  const openAddTask = (projectId = null) => {
+    const projId = projectId || selectedProject?._id || "";
+    const proj = projects.find(p => isSameId(p._id || p.id, projId));
+    if (proj) {
+      setSelectedProject(proj);
+      updateProjectTeamMembers(proj);
     }
     
-    const projId = selectedProject?._id || projectId || "";
     let assignedTo = "";
-    
     if (projectTeamMembers.employees[0]) {
       assignedTo = normalizeId(projectTeamMembers.employees[0]);
     } else if (projectTeamMembers.tl) {
@@ -1200,7 +936,6 @@ const fetchTasks = async (projectId = null) => {
     
     setTaskForm({
       projectId: projId,
-      milestoneId: milestoneToUse?._id || milestoneToUse?.id || "",
       taskTitle: "",
       description: "",
       assignedTo: assignedTo,
@@ -1226,131 +961,35 @@ const fetchTasks = async (projectId = null) => {
       if (project) {
         setSelectedProject(project);
         updateProjectTeamMembers(project);
-        fetchMilestonesByProject(projectId);
         fetchTasks(projectId);
       }
     }
   };
-
-  const toggleMilestone = (milestoneId) => {
-    setExpandedMilestones(prev => ({
-      ...prev,
-      [milestoneId]: !prev[milestoneId]
-    }));
-  };
-
-  const addMilestone = async (e) => {
-    e.preventDefault();
-
-    const projectId = milestoneForm.projectId || selectedProject?._id || "";
-    if (!projectId) {
-      alert("Please select a project for this milestone.");
-      return;
-    }
-
-    if (!milestoneForm.title) {
-      alert("Please enter a milestone title.");
-      return;
-    }
-
-    if (!milestoneForm.dueDate) {
-      alert("Please select a due date for the milestone.");
-      return;
-    }
-
-    try {
-      let formattedDueDate = milestoneForm.dueDate;
-      if (milestoneForm.dueDate) {
-        if (milestoneForm.dueDate.includes('T')) {
-          formattedDueDate = new Date(milestoneForm.dueDate).toISOString();
-        } else {
-          formattedDueDate = new Date(milestoneForm.dueDate + 'T00:00:00').toISOString();
-        }
-      }
-
-      const payload = {
-        projectId,
-        title: milestoneForm.title,
-        description: milestoneForm.description || "",
-        dueDate: formattedDueDate,
-        progress: Number(milestoneForm.progress) || 0,
-        status: milestoneForm.status || "pending",
-        completedAt: milestoneForm.completedAt ? new Date(milestoneForm.completedAt).toISOString() : null,
-      };
-
-      const res = await axios.post(`${MILESTONE_BASE_URL}/create`, payload);
-      const createdMilestone = res.data?.data || res.data?.milestone || res.data;
-
-      if (createdMilestone) {
-        setMilestones((prev) => sortByNewest([createdMilestone, ...prev]));
-        if (selectedProject) {
-          setProjectMilestones((prev) => sortByNewest([createdMilestone, ...prev]));
-        }
-      }
-
-      await fetchMilestones();
-      if (selectedProject) {
-        await fetchMilestonesByProject(selectedProject._id);
-      }
-      
-      setSelectedMilestone(createdMilestone || null);
-      setShowMilestoneModal(false);
-      
-      setMilestoneForm({
-        projectId: selectedProject?._id || "",
-        title: "",
-        description: "",
-        dueDate: "",
-        progress: 0,
-        status: "pending",
-        reviewComment: "",
-        completedAt: "",
-      });
-    } catch (error) {
-      console.error("Milestone create error:", error);
-      alert(`Milestone creation failed: ${error.response?.data?.message || error.message}`);
-    }
-  };
-
-  const addTask = async (e) => {
+    const addTask = async (e) => {
     e.preventDefault();
 
     try {
-      const assignedEmployeeId = taskForm.assignedTo;
+      const assignedEmployeeId = taskForm.assignedTo || taskForm.assignedEmployee;
       
       const assignedEmployee = users.find(user => 
         isSameId(user._id, assignedEmployeeId)
-      );
+      ) || employees.find(emp => isSameId(emp._id, assignedEmployeeId));
       
       const payload = {
         projectId: taskForm.projectId || selectedProject?._id || selectedProject?.id || null,
-        milestoneId: taskForm.milestoneId || selectedMilestone?._id || selectedMilestone?.id || null,
-        taskTitle: taskForm.taskTitle,
-        description: taskForm.description,
+        taskTitle: (taskForm.taskTitle || "").trim(),
+        taskDescription: taskForm.description || "",
+        description: taskForm.description || "",
         assignedEmployee: assignedEmployeeId,
-        assignedBy: taskForm.assignedBy || null,
+        assignedTo: assignedEmployeeId,
+        assignedBy: taskForm.assignedBy || assignedEmployeeId || null,
         startDate: taskForm.startDate || null,
         dueDate: taskForm.dueDate || null,
-        priority: taskForm.priority,
-        progress: Number(taskForm.progress),
-        status: taskForm.status,
+        priority: taskForm.priority || "medium",
+        progress: Number(taskForm.progress) || 0,
+        status: taskForm.status || "pending",
         assignedEmployeeName: assignedEmployee ? getUserName(assignedEmployee) : "",
       };
-
-      if (!payload.projectId && payload.milestoneId) {
-        const milestoneData = await loadSelectedMilestone(payload.milestoneId);
-        const milestoneProjectId = getMilestoneProjectId(milestoneData);
-        if (milestoneProjectId) {
-          payload.projectId = milestoneProjectId;
-          setTaskForm((prev) => ({ ...prev, projectId: milestoneProjectId }));
-
-          const project = projects.find((p) => isSameId(p._id || p.id, milestoneProjectId));
-          if (project) {
-            setSelectedProject(project);
-            updateProjectTeamMembers(project);
-          }
-        }
-      }
 
       if (!payload.projectId) {
         alert("Please select a project before adding a task.");
@@ -1362,20 +1001,18 @@ const fetchTasks = async (projectId = null) => {
         return;
       }
 
-      await axios.post(`${TASK_URL}/create`, payload).catch((error) => {
-        if (error?.response?.status === 404 || error?.response?.status === 405) {
-          return axios.post(TASK_URL, payload);
-        }
-        throw error;
-      });
+      try {
+        await axios.post(`${TASK_URL}/create`, payload);
+      } catch (err1) {
+        console.warn("Primary create task failed, trying fallback:", err1.message);
+        await axios.post(`${TASK_PROJECT_MANAGE_URL}/create`, payload);
+      }
 
-      await fetchMilestones();
       await fetchTasks();
       
       setShowTaskModal(false);
       setTaskForm({
         projectId: "",
-        milestoneId: "",
         taskTitle: "",
         description: "",
         assignedTo: "",
@@ -1387,15 +1024,20 @@ const fetchTasks = async (projectId = null) => {
         progress: 0,
         status: "pending",
       });
+      alert("Task created successfully!");
     } catch (error) {
       console.error("Task create error:", error);
       alert("Task creation failed: " + (error?.response?.data?.message || error?.message || "Unknown error"));
     }
   };
 
-  const handleStatusChange = async (taskId, newStatus) => {
+    const handleStatusChange = async (taskId, newStatus) => {
     try {
-      await axios.put(`${TASK_URL}/status/${taskId}`, { status: newStatus });
+      try {
+        await axios.put(`${TASK_URL}/status/${taskId}`, { status: newStatus });
+      } catch (e) {
+        await axios.put(`${TASK_PROJECT_MANAGE_URL}/status/${taskId}`, { status: newStatus });
+      }
       await fetchTasks(selectedProject?._id || null);
     } catch (error) {
       console.error("Failed to update status:", error);
@@ -1411,7 +1053,11 @@ const fetchTasks = async (projectId = null) => {
     });
     if (!confirmed) return;
     try {
-      await axios.delete(`${TASK_URL}/delete/${taskId}`);
+      try {
+        await axios.delete(`${TASK_URL}/delete/${taskId}`);
+      } catch (e) {
+        await axios.delete(`${TASK_PROJECT_MANAGE_URL}/delete/${taskId}`);
+      }
       await fetchTasks(selectedProject?._id || null);
     } catch (error) {
       console.error("Failed to delete task:", error);
@@ -1570,466 +1216,717 @@ const fetchTasks = async (projectId = null) => {
  
   const getStatusColor = (status) => {
     const colors = {
-      'pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      'in-progress': 'bg-blue-100 text-blue-800 border-blue-200',
-      'in_progress': 'bg-blue-100 text-blue-800 border-blue-200',
-      'completed': 'bg-green-100 text-green-800 border-green-200',
-      'cancelled': 'bg-red-100 text-red-800 border-red-200',
-      'testing': 'bg-purple-100 text-purple-800 border-purple-200',
-      'review': 'bg-indigo-100 text-indigo-800 border-indigo-200'
+      'pending': 'bg-amber-50 text-amber-700 border-amber-200/80',
+      'in-progress': 'bg-blue-50 text-blue-700 border-blue-200/80',
+      'in_progress': 'bg-blue-50 text-blue-700 border-blue-200/80',
+      'completed': 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+      'cancelled': 'bg-rose-50 text-rose-700 border-rose-200/80',
+      'testing': 'bg-purple-50 text-purple-700 border-purple-200/80',
+      'review': 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
     };
-    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+    return colors[status] || 'bg-slate-50 text-slate-700 border-slate-200';
+  };
+
+  const getStatusDotColor = (status) => {
+    const dots = {
+      'pending': 'bg-amber-500',
+      'in-progress': 'bg-blue-500',
+      'in_progress': 'bg-blue-500',
+      'completed': 'bg-emerald-500',
+      'cancelled': 'bg-rose-500',
+      'testing': 'bg-purple-500',
+      'review': 'bg-indigo-500'
+    };
+    return dots[status] || 'bg-slate-400';
   };
 
   const getPriorityColor = (priority) => {
     const colors = {
-      'low': 'bg-green-100 text-green-800',
-      'medium': 'bg-yellow-100 text-yellow-800',
-      'high': 'bg-red-100 text-red-800'
+      'low': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      'medium': 'bg-amber-50 text-amber-700 border-amber-200',
+      'high': 'bg-rose-50 text-rose-700 border-rose-200'
     };
-    return colors[priority] || 'bg-gray-100 text-gray-800';
+    return colors[priority] || 'bg-slate-50 text-slate-700 border-slate-200';
+  };
+
+  const getPriorityLeftBorder = (priority) => {
+    if (priority === 'high') return 'border-l-4 border-l-rose-500';
+    if (priority === 'medium') return 'border-l-4 border-l-amber-500';
+    if (priority === 'low') return 'border-l-4 border-l-emerald-500';
+    return 'border-l-4 border-l-slate-300';
   };
 
   const getStatusIcon = (status) => {
-    if (status === 'completed') return <CheckCircle className="w-4 h-4" />;
-    if (status === 'in-progress' || status === 'in_progress') return <Loader2 className="w-4 h-4 animate-spin" />;
-    if (status === 'cancelled') return <X className="w-4 h-4" />;
-    return <AlertCircle className="w-4 h-4" />;
+    if (status === 'completed') return <CheckCircle className="w-4 h-4 text-emerald-600" />;
+    if (status === 'in-progress' || status === 'in_progress') return <Loader2 className="w-4 h-4 animate-spin text-blue-600" />;
+    if (status === 'cancelled') return <X className="w-4 h-4 text-rose-600" />;
+    return <AlertCircle className="w-4 h-4 text-amber-600" />;
   };
 
   const getProgressColor = (progress) => {
-    if (progress >= 80) return 'bg-green-500';
+    if (progress >= 80) return 'bg-emerald-500';
     if (progress >= 50) return 'bg-blue-500';
-    if (progress >= 30) return 'bg-yellow-500';
-    return 'bg-red-500';
+    if (progress >= 30) return 'bg-amber-500';
+    return 'bg-rose-500';
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 sm:p-6">
-      {confirmationDialog}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-              <FolderOpen className="w-8 h-8 text-blue-600" />
-              Project Management
-            </h1>
-            <p className="text-gray-500 mt-1">Manage projects, milestones, and tasks efficiently</p>
-          </div>
+  // Filter projects by search query, status, and priority
+  const filteredProjects = projects.filter((project) => {
+    const matchesSearch =
+      !searchQuery.trim() ||
+      (project.projectName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (project.clientName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (getProjectTeamLeadName(project) || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tasks.some(
+        (t) =>
+          isSameId(t.projectId, project._id) &&
+          (t.taskTitle || t.title || "").toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
+    const matchesStatus =
+      statusFilter === "all" ||
+      (project.status || "").toLowerCase() === statusFilter.toLowerCase();
+
+    const matchesPriority =
+      priorityFilter === "all" ||
+      (project.priority || "").toLowerCase() === priorityFilter.toLowerCase();
+
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
+
+  // KPI calculations
+  const totalProjectsCount = projects.length;
+  const totalTasksCount = tasks.length;
+  const completedTasksCount = tasks.filter((t) => (t.status || "").toLowerCase() === "completed").length;
+  const inProgressTasksCount = tasks.filter(
+    (t) =>
+      (t.status || "").toLowerCase() === "in_progress" ||
+      (t.status || "").toLowerCase() === "in-progress" ||
+      (t.status || "").toLowerCase() === "testing" ||
+      (t.status || "").toLowerCase() === "review"
+  ).length;
+  const overallProgress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  return (
+    <div className="min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8">
+      {confirmationDialog}
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Top Action Bar */}
+        <div className="flex items-center justify-end -mt-1 sm:-mt-2 mb-1">
           <button
             onClick={() => {
               setSelectedProject(null);
               setProjectForm(defaultProjectForm);
               setShowProjectModal(true);
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 font-medium"
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl shadow-md shadow-blue-600/20 hover:shadow-lg hover:shadow-blue-600/30 transition-all duration-200 flex items-center justify-center gap-2 font-semibold text-sm cursor-pointer active:scale-95"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             New Project
           </button>
         </div>
 
+        {/* KPI Metrics Dashboard Cards (Compact) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Total Projects */}
+          <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Total Projects
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <FolderOpen className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1.5">
+              <span className="text-xl sm:text-2xl font-bold text-slate-900">
+                {totalProjectsCount}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">Workspaces</span>
+            </div>
+            <div className="mt-1 text-[11px] text-blue-600 font-medium flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              <span>Active client pipelines</span>
+            </div>
+          </div>
+
+          {/* Card 2: Total Tasks */}
+          <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Total Tasks
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <ListTodo className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1.5">
+              <span className="text-xl sm:text-2xl font-bold text-slate-900">
+                {totalTasksCount}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">Assigned</span>
+            </div>
+            <div className="mt-1 text-[11px] text-indigo-600 font-medium flex items-center gap-1">
+              <Layers className="w-3 h-3" />
+              <span>Across all projects</span>
+            </div>
+          </div>
+
+          {/* Card 3: In Progress */}
+          <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                In Progress
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1.5">
+              <span className="text-xl sm:text-2xl font-bold text-slate-900">
+                {inProgressTasksCount}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">Active</span>
+            </div>
+            <div className="mt-1 text-[11px] text-amber-600 font-medium flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span>Under review & testing</span>
+            </div>
+          </div>
+
+          {/* Card 4: Completed Tasks */}
+          <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Completed
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1.5">
+              <span className="text-xl sm:text-2xl font-bold text-slate-900">
+                {completedTasksCount}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">({overallProgress}% Done)</span>
+            </div>
+            <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+              <div
+                className="bg-emerald-500 h-1 rounded-full transition-all duration-500"
+                style={{ width: `${overallProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Filters Bar */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by project name, client, TL, or task title..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-9 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-800 placeholder-slate-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            {/* Priority Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase">Priority:</span>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">All</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            {(searchQuery || statusFilter !== "all" || priorityFilter !== "all") && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setStatusFilter("all");
+                  setPriorityFilter("all");
+                }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline px-2 py-1"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Project List */}
         {loading ? (
-          <div className="flex justify-center items-center py-16 sm:py-20">
-            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600" />
+          <div className="flex flex-col justify-center items-center py-20 bg-white rounded-2xl border border-slate-200/80">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3" />
+            <p className="text-sm font-medium text-slate-500">Loading projects and tasks...</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {projects.length > 0 ? (
-              sortByNewest(projects).map((project) => {
+          <div className="space-y-4">
+            {filteredProjects.length > 0 ? (
+              sortByNewest(filteredProjects).map((project) => {
                 const isExpanded = expandedProjects[project._id] || false;
-                const projectMilestonesList = projectMilestones.filter(m => 
-                  isSameId(getMilestoneProjectId(m), project._id)
-                );
-                
+                const projectTasks = tasks.filter((t) => isSameId(t.projectId, project._id));
+                const completedCount = projectTasks.filter((t) => (t.status || "").toLowerCase() === "completed").length;
+                const projectPercent = projectTasks.length > 0 ? Math.round((completedCount / projectTasks.length) * 100) : 0;
+
                 return (
-                  <div key={project._id} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow duration-200">
-                    {/* Project Header */}
-                    <div 
-                      className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors duration-150"
+                  <div
+                    key={project._id}
+                    className="bg-white rounded-2xl border border-slate-200/90 shadow-[0_2px_12px_-3px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.07)] hover:border-slate-300/80 transition-all duration-200 overflow-hidden"
+                  >
+                    {/* Project Header Card */}
+                    <div
+                      className="p-5 sm:p-6 cursor-pointer hover:bg-slate-50/60 transition-colors duration-150 select-none"
                       onClick={() => toggleProject(project._id)}
                     >
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        
+                        {/* Left Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3">
-                            <button className="text-gray-500 hover:text-gray-700 p-1">
-                              {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <button
+                              type="button"
+                              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors flex-shrink-0"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 transition-transform duration-200" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 transition-transform duration-200" />
+                              )}
                             </button>
-                            <h3 className="text-xl font-semibold text-gray-800 truncate">
+
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs flex-shrink-0">
+                              {(project.projectName || "P").charAt(0).toUpperCase()}
+                            </div>
+
+                            <h3 className="text-lg sm:text-xl font-bold text-slate-800 truncate">
                               {project.projectName}
                             </h3>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(project.status)}`}>
-                              {project.status}
+
+                            {/* Status Badge with Dot */}
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusColor(
+                                project.status
+                              )}`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor(project.status)}`} />
+                              {project.status || "pending"}
                             </span>
+
+                            {/* Priority Badge */}
+                            {project.priority && (
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border uppercase tracking-wider ${getPriorityColor(
+                                  project.priority
+                                )}`}
+                              >
+                                {project.priority}
+                              </span>
+                            )}
                           </div>
-                          <div className="mt-2 sm:ml-10 flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <User className="w-4 h-4" />
-                              {project.clientName}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Users className="w-4 h-4" />
-                              TL: {getProjectTeamLeadName(project)}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(project.priority)}`}>
-                              {project.priority}
-                            </span>
+
+                          {/* Metadata Row */}
+                          <div className="mt-3 sm:ml-10 flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-600">
+                            {project.clientName && (
+                              <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/70 px-2.5 py-1 rounded-lg">
+                                <User className="w-3.5 h-3.5 text-slate-500" />
+                                <span className="text-slate-500">Client:</span>
+                                <span className="font-semibold text-slate-800">{project.clientName}</span>
+                              </span>
+                            )}
+
+                            {getProjectTeamLeadName(project) && (
+                              <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/70 px-2.5 py-1 rounded-lg">
+                                <Users className="w-3.5 h-3.5 text-blue-500" />
+                                <span className="text-slate-500">TL:</span>
+                                <span className="font-semibold text-slate-800">{getProjectTeamLeadName(project)}</span>
+                              </span>
+                            )}
+
                             {project.projectBudget && (
-                              <span className="flex items-center gap-1 text-green-600 font-medium">
+                              <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 px-2.5 py-1 rounded-lg font-semibold text-xs">
+                                <DollarSign className="w-3.5 h-3.5" />
                                 Budget: Rs. {project.projectBudget}
+                              </span>
+                            )}
+
+                            {project.startDate && (
+                              <span className="inline-flex items-center gap-1 text-slate-500 text-xs">
+                                <Calendar className="w-3.5 h-3.5" />
+                                {new Date(project.startDate).toLocaleDateString()}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAddMilestone(project._id);
-                            }}
-                            className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium flex items-center gap-1"
-                          >
-                            <Plus className="w-4 h-4" />
-                            Milestone
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAddTask(project._id);
-                            }}
-                            className="px-3 py-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium flex items-center gap-1"
-                          >
-                            <Plus className="w-4 h-4" />
-                            Task
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditProject(project);
-                            }}
-                            className="px-3 py-1.5 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium flex items-center gap-1"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                            Edit
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Project Stats */}
-                      <div className="mt-3 sm:ml-10 flex flex-wrap gap-6 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Target className="w-4 h-4 text-blue-500" />
-                          <span className="text-gray-600">Milestones: <span className="font-semibold text-gray-800">{projectMilestonesList.length}</span></span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <ListTodo className="w-4 h-4 text-green-500" />
-                          <span className="text-gray-600">Tasks: <span className="font-semibold text-gray-800">{tasks.filter(t => isSameId(t.projectId, project._id)).length}</span></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Expanded Content */}
-                    {isExpanded && (
-                      <div className="border-t border-gray-200 p-4 sm:p-6 bg-gray-50/50">
-                        {/* Milestones Section */}
-                        <div className="mb-6">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-semibold text-gray-700 flex items-center gap-2">
-                              <Target className="w-5 h-5 text-blue-500" />
-                              Milestones
-                            </h4>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => openAddTask(project._id, null)}
-                                className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1 bg-green-50 px-2.5 py-1 rounded-md border border-green-200 hover:bg-green-100 transition-colors"
-                              >
-                                <Plus className="w-4 h-4" />
-                                Add Task
-                              </button>
-                              <button
-                                onClick={() => openAddMilestone(project._id)}
-                                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors"
-                              >
-                                <Plus className="w-4 h-4" />
-                                Add Milestone
-                              </button>
+                        {/* Right: Progress & Action Buttons */}
+                        <div className="flex items-center gap-3 sm:gap-4 flex-wrap sm:flex-nowrap justify-between lg:justify-end sm:ml-10 lg:ml-0">
+                          
+                          {/* Mini Progress Widget */}
+                          <div className="flex flex-col items-end min-w-[120px]">
+                            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                              <ListTodo className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{completedCount} / {projectTasks.length} Tasks</span>
+                              <span className="font-bold text-slate-800">({projectPercent}%)</span>
+                            </div>
+                            <div className="w-28 sm:w-32 bg-slate-100 rounded-full h-1.5 mt-1.5 overflow-hidden">
+                              <div
+                                className={`h-1.5 rounded-full transition-all duration-300 ${getProgressColor(projectPercent)}`}
+                                style={{ width: `${projectPercent}%` }}
+                              />
                             </div>
                           </div>
 
-                          {projectMilestonesList.length > 0 ? (
-                            <div className="space-y-3">
-                              {sortByNewest(projectMilestonesList).map((milestone) => {
-                                const isMilestoneExpanded = expandedMilestones[milestone._id] || false;
-                                const milestoneTasks = tasks.filter(t => 
-                                  isSameId(t.milestoneId, milestone._id)
-                                );
-                                
-                                return (
-                                  <div key={milestone._id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                                    <div 
-                                      className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                                      onClick={() => toggleMilestone(milestone._id)}
-                                    >
-                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                                          <button className="text-gray-400">
-                                            {isMilestoneExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          {/* Quick Action Buttons */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAddTask(project._id);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 rounded-xl transition-all text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Task
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditProject(project);
+                              }}
+                              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl transition-all text-xs font-semibold flex items-center gap-1.5"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Expanded Project View - Tasks List */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-200/80 bg-slate-50/50 p-4 sm:p-6">
+                        
+                        {/* Section Header */}
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/60">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                              <ListTodo className="w-4 h-4" />
+                            </div>
+                            <h4 className="font-bold text-slate-800 text-sm sm:text-base">
+                              Project Tasks
+                            </h4>
+                            <span className="text-xs bg-slate-200/80 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
+                              {projectTasks.length}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => openAddTask(project._id, null)}
+                            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Task
+                          </button>
+                        </div>
+
+                        {/* Task Cards */}
+                        {projectTasks.length > 0 ? (
+                          <div className="space-y-3">
+                            {sortTasksByNewest(projectTasks).map((task) => {
+                              const p = getProjectParticipants(task);
+                              const assignedMember = getTaskAssignedMember(task);
+                              const selectedReportMemberId = selectedReportMemberByTask[task._id];
+                              const taskReports = (taskUpdatesById[task._id] || []).filter((update) =>
+                                !selectedReportMemberId || getUpdateMemberId(update) === selectedReportMemberId
+                              );
+
+                              return (
+                                <div
+                                  key={task._id}
+                                  onClick={() => {
+                                    setSelectedTaskDetails(task);
+                                    fetchTaskUpdates(task._id);
+                                  }}
+                                  className={`bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all p-4 cursor-pointer group ${getPriorityLeftBorder(
+                                    task.priority
+                                  )}`}
+                                >
+                                  {/* Task Top Row */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span
+                                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getPriorityColor(
+                                            task.priority
+                                          )}`}
+                                        >
+                                          {task.priority || "NORMAL"}
+                                        </span>
+                                        <h5 className="font-bold text-slate-900 text-sm sm:text-base truncate">
+                                          {task.taskTitle || task.title || "Untitled Task"}
+                                        </h5>
+                                      </div>
+
+                                      {task.description && (
+                                        <p className="text-xs sm:text-sm text-slate-600 mt-1 line-clamp-2">
+                                          {task.description}
+                                        </p>
+                                      )}
+
+                                      {/* Assigned Details & Due Date */}
+                                      <div className="flex flex-wrap items-center gap-2.5 mt-2.5 text-xs text-slate-600">
+                                        {assignedMember && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleReportMemberClick(task._id, assignedMember.member);
+                                            }}
+                                            className="inline-flex items-center gap-1.5 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 text-blue-700 px-2.5 py-1 rounded-lg font-medium transition-colors"
+                                            title={`View ${assignedMember.role} daily reports`}
+                                          >
+                                            <div className="w-4 h-4 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center text-[10px] font-bold">
+                                              {(getUserName(assignedMember.member) || "U").charAt(0).toUpperCase()}
+                                            </div>
+                                            <span>{getUserName(assignedMember.member)}</span>
+                                            <span className="text-[10px] opacity-75">({assignedMember.role})</span>
                                           </button>
-                                          <div className="min-w-0 flex-1">
-                                            <h5 className="font-medium text-gray-800 truncate">
-                                              {getMilestoneTitle(milestone)}
-                                            </h5>
-                                            {milestone.description && (
-                                              <p className="text-sm text-gray-500 truncate">{milestone.description}</p>
-                                            )}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 flex-wrap">
-                                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(milestone.status)}`}>
-                                            {milestone.status}
+                                        )}
+
+                                        {p.tlName && (
+                                          <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-slate-600 font-medium">
+                                            <Users className="w-3 h-3 text-slate-400" />
+                                            <span>TL: {p.tlName}</span>
                                           </span>
-                                          {milestone.dueDate && (
-                                            <span className="flex items-center gap-1 text-xs text-gray-500">
-                                              <Calendar className="w-3 h-3" />
-                                              {new Date(milestone.dueDate).toLocaleDateString()}
-                                            </span>
-                                          )}
-                                          <span className="text-sm font-medium text-gray-700">
-                                            {milestone.progress || 0}%
+                                        )}
+
+                                        {task.dueDate && (
+                                          <span className="inline-flex items-center gap-1 text-slate-500 font-medium">
+                                            <Calendar className="w-3 h-3 text-slate-400" />
+                                            Due: {new Date(task.dueDate).toLocaleDateString()}
                                           </span>
-                                          <div className="w-full sm:w-24 max-w-[120px] h-2 bg-gray-200 rounded-full overflow-hidden">
-                                            <div 
-                                              className={`h-full rounded-full ${getProgressColor(milestone.progress || 0)} transition-all duration-300`}
-                                              style={{ width: `${milestone.progress || 0}%` }}
-                                            />
-                                          </div>
-                                        </div>
+                                        )}
                                       </div>
                                     </div>
 
-                                    {/* Milestone Tasks */}
-                                    {isMilestoneExpanded && (
-                                      <div className="border-t border-gray-200 p-3 sm:p-4 bg-gray-50">
-                                        <div className="flex items-center justify-between mb-3">
-                                          <h6 className="font-medium text-gray-600 flex items-center gap-2">
-                                            <ListTodo className="w-4 h-4 text-green-500" />
-                                            Tasks ({milestoneTasks.length})
-                                          </h6>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openAddTask(project._id, milestone._id);
-                                            }}
-                                            className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
-                                          >
-                                            <Plus className="w-4 h-4" />
-                                            Add Task
-                                          </button>
-                                        </div>
+                                    {/* Task Status & Actions */}
+                                    <div className="flex items-center gap-2 self-start sm:self-center flex-shrink-0">
+                                      <select
+                                        value={task.status || "pending"} onClick={(e) => e.stopPropagation()} onChange={(e) => handleStatusChange(task._id, e.target.value)}
+                                        className={`text-xs px-2.5 py-1.5 rounded-lg border font-semibold focus:outline-none cursor-pointer transition-colors shadow-sm ${getStatusColor(
+                                          task.status || "pending"
+                                        )}`}
+                                      >
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="testing">Testing</option>
+                                        <option value="review">Review</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                      </select>
 
-                                        {milestoneTasks.length > 0 ? (
-                                          <div className="space-y-2">
-                                            {sortTasksByNewest(milestoneTasks).map((task) => {
-                                                      const p = getProjectParticipants(task);
-                                                      const assignedMember = getTaskAssignedMember(task);
-                                                      const selectedReportMemberId = selectedReportMemberByTask[task._id];
-                                                      const taskReports = (taskUpdatesById[task._id] || []).filter((update) =>
-                                                        !selectedReportMemberId || getUpdateMemberId(update) === selectedReportMemberId
-                                                      );
-                                              return (
-                                                <div key={task._id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-sm transition-shadow">
-                                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                    <div className="flex-1 min-w-0">
-                                                      <div className="flex items-center gap-2">
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                                                          {task.priority}
-                                                        </span>
-                                                        <h6 className="font-medium text-gray-800 truncate">
-                                                          {task.taskTitle || task.title || "Untitled Task"}
-                                                        </h6>
-                                                      </div>
-                                                      {task.description && (
-                                                        <p className="text-sm text-gray-500 truncate">{task.description}</p>
-                                                      )}
-                                                      <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-500">
-                                                        {assignedMember && (
-                                                          <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              handleReportMemberClick(task._id, assignedMember.member);
-                                                            }}
-                                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
-                                                            title={`View ${assignedMember.role} daily reports`}
-                                                          >
-                                                            <User className="w-3 h-3" />
-                                                            {getUserName(assignedMember.member)} ({assignedMember.role})
-                                                          </button>
-                                                        )}
-                                                        {p.tlName && (
-                                                          <span className="flex items-center gap-1">
-                                                            <Users className="w-3 h-3" />
-                                                            TL: {p.tlName}
-                                                          </span>
-                                                        )}
-                                                        {task.dueDate && (
-                                                          <span className="flex items-center gap-1">
-                                                            <Calendar className="w-3 h-3" />
-                                                            {new Date(task.dueDate).toLocaleDateString()}
-                                                          </span>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                      <select
-                                                        value={task.status || "pending"}
-                                                        onChange={(e) => handleStatusChange(task._id, e.target.value)}
-                                                        className={`text-xs px-2 py-1 border rounded font-medium focus:outline-none ${getStatusColor(task.status || "pending")}`}
-                                                      >
-                                                        <option value="pending">Pending</option>
-                                                        <option value="in_progress">In Progress</option>
-                                                        <option value="testing">Testing</option>
-                                                        <option value="review">Review</option>
-                                                        <option value="completed">Completed</option>
-                                                        <option value="cancelled">Cancelled</option>
-                                                      </select>
-                                                      <button
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          if (assignedMember) {
-                                                            handleReportMemberClick(task._id, assignedMember.member);
-                                                          } else {
-                                                            fetchTaskUpdates(task._id);
-                                                          }
-                                                        }}
-                                                        className="text-blue-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50"
-                                                        title="View Daily Updates"
-                                                      >
-                                                        <MessageSquare className="w-4 h-4" />
-                                                      </button>
-                                                      <button
-                                                        onClick={() => handleDeleteTask(task._id)}
-                                                        className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
-                                                      >
-                                                        <Trash2 className="w-4 h-4" />
-                                                      </button>
-                                                    </div>
-                                                  </div>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (assignedMember) {
+                                            handleReportMemberClick(task._id, assignedMember.member);
+                                          } else {
+                                            fetchTaskUpdates(task._id);
+                                          }
+                                        }}
+                                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 p-1.5 rounded-lg transition-colors"
+                                        title="View Daily Updates"
+                                      >
+                                        <MessageSquare className="w-4 h-4" />
+                                      </button>
 
-                                                  <div className="mt-3 border-t border-gray-100 pt-3">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                      <h6 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                                                        Daily Reports
-                                                      </h6>
-                                                      <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          fetchTaskUpdates(task._id);
-                                                        }}
-                                                        className="text-[11px] text-blue-600 hover:text-blue-700 font-medium"
-                                                      >
-                                                        Refresh
-                                                      </button>
-                                                    </div>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteTask(task._id); }}
+                                        className="text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 p-1.5 rounded-lg transition-colors"
+                                        title="Delete Task"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </div>
 
-                                                    {loadingTaskUpdates[task._id] ? (
-                                                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                                                        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                                                        Loading reports...
-                                                      </div>
-                                                    ) : taskReports.length > 0 ? (
-                                                      <div className="space-y-2">
-                                                        {taskReports.map((update) => (
-                                                          <div key={update._id || update.id} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
-                                                            <div className="flex items-center justify-between gap-2 mb-1">
-                                                              <div className="flex items-center gap-2">
-                                                                <User className="w-3.5 h-3.5 text-gray-500" />
-                                                                <span className="text-sm font-medium text-gray-700">
-                                                                  {getUpdateMemberName(update)}
-                                                                </span>
-                                                              </div>
-                                                              <span className="text-[11px] text-gray-500">
-                                                                {update.createdAt ? new Date(update.createdAt).toLocaleString() : "No date"}
-                                                              </span>
-                                                            </div>
-                                                            <p className="text-sm text-gray-600">
-                                                              {update.updateText || update.message || update.description || "No report details provided."}
-                                                            </p>
-                                                            {typeof update.progress === "number" && (
-                                                              <div className="mt-2 flex items-center gap-2">
-                                                                <div className="h-2 flex-1 rounded-full bg-gray-200 overflow-hidden">
-                                                                  <div
-                                                                    className={`h-full rounded-full ${getProgressColor(update.progress)}`}
-                                                                    style={{ width: `${Math.max(0, Math.min(100, update.progress))}%` }}
-                                                                  />
-                                                                </div>
-                                                                <span className="text-xs font-medium text-gray-700">{update.progress}%</span>
-                                                              </div>
-                                                            )}
-                                                          </div>
-                                                        ))}
-                                                      </div>
-                                                    ) : (
-                                                      <p className="text-sm text-gray-500">
-                                                        {selectedReportMemberId
-                                                          ? "No daily reports for this assigned member yet."
-                                                          : "Click the assigned member name to view daily reports."}
-                                                      </p>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        ) : (
-                                          <p className="text-gray-500 text-sm text-center py-4">
-                                            No tasks yet. Click "Add Task" to create one.
-                                          </p>
-                                        )}
+                                  {/* Daily Reports Box */}
+                                  <div className="mt-3.5 border-t border-slate-100 pt-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <h6 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+                                        Daily Reports
+                                      </h6>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          fetchTaskUpdates(task._id);
+                                        }}
+                                        className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-1"
+                                      >
+                                        Refresh
+                                      </button>
+                                    </div>
+
+                                    {loadingTaskUpdates[task._id] ? (
+                                      <div className="flex items-center gap-2 text-xs text-slate-500 py-2">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                                        Loading reports...
                                       </div>
+                                    ) : taskReports.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {taskReports.map((update) => (
+                                          <div
+                                            key={update._id || update.id}
+                                            className="rounded-xl border border-slate-200 bg-slate-50/80 p-3"
+                                          >
+                                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold">
+                                                  {(getUpdateMemberName(update) || "U").charAt(0).toUpperCase()}
+                                                </div>
+                                                <span className="text-xs font-semibold text-slate-800">
+                                                  {getUpdateMemberName(update)}
+                                                </span>
+                                              </div>
+                                              <span className="text-[10px] text-slate-400 font-medium">
+                                                {update.createdAt ? new Date(update.createdAt).toLocaleString() : "No date"}
+                                              </span>
+                                            </div>
+                                            <p className="text-xs text-slate-600">
+                                              {update.updateText || update.message || update.description || "No report details provided."}
+                                            </p>
+                                            {typeof update.progress === "number" && (
+                                              <div className="mt-2 flex items-center gap-2">
+                                                <div className="h-1.5 flex-1 rounded-full bg-slate-200 overflow-hidden">
+                                                  <div
+                                                    className={`h-1.5 rounded-full ${getProgressColor(update.progress)}`}
+                                                    style={{ width: `${Math.max(0, Math.min(100, update.progress))}%` }}
+                                                  />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-700">{update.progress}%</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-slate-400 py-1">
+                                        {selectedReportMemberId
+                                          ? "No daily reports for this assigned member yet."
+                                          : "Click the assigned member name to view daily reports."}
+                                      </p>
                                     )}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-                              <Target className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                              <p className="text-gray-500">No milestones yet</p>
-                              <button
-                                onClick={() => openAddMilestone(project._id)}
-                                className="mt-2 text-blue-600 hover:text-blue-700 font-medium"
-                              >
-                                Create your first milestone
-                              </button>
-                            </div>
-                          )}
-                        </div>
+
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+                            <ListTodo className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                            <p className="text-sm font-semibold text-slate-700">No tasks created yet</p>
+                            <p className="text-xs text-slate-400 mt-0.5 mb-3">Add tasks to track progress and assign team members</p>
+                            <button
+                              type="button"
+                              onClick={() => openAddTask(project._id, null)}
+                              className="text-xs text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Create first task
+                            </button>
+                          </div>
+                        )}
+
                       </div>
                     )}
                   </div>
                 );
               })
             ) : (
-              <div className="bg-white rounded-xl shadow-md p-8 sm:p-12 text-center">
-                <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Projects Yet</h3>
-                <p className="text-gray-500 mb-4">Get started by creating your first project</p>
-                <button
-                  onClick={() => {
-                    setSelectedProject(null);
-                    setProjectForm(defaultProjectForm);
-                    setShowProjectModal(true);
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 mx-auto"
-                >
-                  <Plus className="w-5 h-5" />
-                  Create Project
-                </button>
+              <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
+                <FolderOpen className="w-16 h-16 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-slate-800 mb-1">
+                  {searchQuery || statusFilter !== "all" || priorityFilter !== "all"
+                    ? "No Matching Projects Found"
+                    : "No Projects Yet"}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mb-4 max-w-md mx-auto">
+                  {searchQuery || statusFilter !== "all" || priorityFilter !== "all"
+                    ? "Try adjusting your search query or reset your status/priority filters."
+                    : "Get started by creating your first project workspace and adding tasks."}
+                </p>
+                {searchQuery || statusFilter !== "all" || priorityFilter !== "all" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setStatusFilter("all");
+                      setPriorityFilter("all");
+                    }}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedProject(null);
+                      setProjectForm(defaultProjectForm);
+                      setShowProjectModal(true);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all text-xs font-semibold inline-flex items-center gap-1.5 mx-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Project
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2423,119 +2320,7 @@ const fetchTasks = async (projectId = null) => {
         </div>
       )}
 
-      {/* Milestone Modal */}
-      {showMilestoneModal && (
-        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 relative mx-2 sm:mx-0">
-            <button
-              onClick={() => setShowMilestoneModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
 
-            <form onSubmit={addMilestone}>
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Target className="w-6 h-6 text-blue-500" />
-                Create Milestone
-              </h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
-                  <select
-                    name="projectId"
-                    value={milestoneForm.projectId}
-                    onChange={handleMilestoneChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select Project</option>
-                    {projects.map((project) => (
-                      <option key={project._id} value={project._id}>
-                        {project.projectName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                  <input
-                    name="title"
-                    placeholder="Milestone title"
-                    value={milestoneForm.title}
-                    onChange={handleMilestoneChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <textarea
-                    name="description"
-                    placeholder="Describe the milestone..."
-                    value={milestoneForm.description}
-                    onChange={handleMilestoneChange}
-                    rows="3"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
-                  <input
-                    type="datetime-local"
-                    name="dueDate"
-                    value={milestoneForm.dueDate}
-                    onChange={handleMilestoneChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Progress (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      name="progress"
-                      placeholder="0"
-                      value={milestoneForm.progress}
-                      onChange={handleMilestoneChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select
-                      name="status"
-                      value={milestoneForm.status}
-                      onChange={handleMilestoneChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                Create Milestone
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Task Modal */}
       {showTaskModal && (
@@ -2577,13 +2362,12 @@ const fetchTasks = async (projectId = null) => {
                   <select
                     name="projectId"
                     value={taskForm.projectId || ""}
-                    onChange={async (e) => {
+                    onChange={(e) => {
                       const projectId = e.target.value;
                       const project = projects.find(
                         (p) => isSameId(p._id || p.id, projectId)
                       );
                       setSelectedProject(project || null);
-                      setSelectedMilestone(null);
                       
                       if (project) {
                         updateProjectTeamMembers(project);
@@ -2592,17 +2376,10 @@ const fetchTasks = async (projectId = null) => {
                       setTaskForm((prev) => ({
                         ...prev,
                         projectId: project?._id || projectId || "",
-                        milestoneId: "",
                         assignedTo: project && project.employees?.[0]
                           ? normalizeId(project.employees[0])
                           : prev.assignedTo
                       }));
-
-                      if (projectId) {
-                        await fetchMilestonesByProject(projectId);
-                      } else {
-                        setProjectMilestones([]);
-                      }
                     }}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
@@ -2611,43 +2388,6 @@ const fetchTasks = async (projectId = null) => {
                     {projects.map((project) => (
                       <option key={project._id} value={project._id}>
                         {project.projectName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Milestone (Optional)</label>
-                  <select
-                    name="milestoneId"
-                    value={taskForm.milestoneId || ""}
-                    onChange={async (e) => {
-                      const mid = e.target.value;
-                      setTaskForm((prev) => ({ ...prev, milestoneId: mid }));
-                      if (mid) {
-                        const milestone = (projectMilestones.length > 0 ? projectMilestones : milestones).find(
-                          (m) => isSameId(m._id || m.id, mid)
-                        );
-                        if (milestone) {
-                          await handleSelectMilestone(milestone);
-                        }
-                      } else {
-                        setSelectedMilestone(null);
-                      }
-                    }}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select Milestone (Optional)</option>
-                    {(taskForm.projectId
-                      ? projectMilestones.length > 0
-                        ? projectMilestones
-                        : milestones.filter((milestone) =>
-                            isSameId(getMilestoneProjectId(milestone), taskForm.projectId)
-                          )
-                      : milestones
-                    ).map((milestone) => (
-                      <option key={milestone._id || milestone.id} value={milestone._id || milestone.id}>
-                        {getMilestoneTitle(milestone)}
                       </option>
                     ))}
                   </select>
@@ -2794,6 +2534,242 @@ const fetchTasks = async (projectId = null) => {
                 Create Task
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+    
+      {/* Task Full Details Modal */}
+      {selectedTaskDetails && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={() => setSelectedTaskDetails(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100/80 text-blue-700 flex items-center justify-center font-bold">
+                  <ListTodo className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base sm:text-lg">
+                    Task Details
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Full overview, assigned team & daily progress
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedTaskDetails(null)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
+              {(() => {
+                const modalProject = projects.find(
+                  (p) => String(p._id) === String(selectedTaskDetails.projectId || selectedTaskDetails.project?._id || selectedTaskDetails.project)
+                );
+                const modalParticipants = getProjectParticipants(selectedTaskDetails);
+                const modalAssigned = getTaskAssignedMember(selectedTaskDetails);
+                const modalUpdates = (taskUpdatesById[selectedTaskDetails._id] || []);
+
+                return (
+                  <>
+                    {/* Title & Badges */}
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${getPriorityColor(
+                            selectedTaskDetails.priority
+                          )}`}
+                        >
+                          {selectedTaskDetails.priority || "NORMAL"} PRIORITY
+                        </span>
+
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold border ${getStatusColor(
+                            selectedTaskDetails.status
+                          )}`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${getStatusDotColor(selectedTaskDetails.status)}`} />
+                          {selectedTaskDetails.status || "pending"}
+                        </span>
+
+                        {typeof selectedTaskDetails.progress === "number" && (
+                          <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                            {selectedTaskDetails.progress}% Progress
+                          </span>
+                        )}
+                      </div>
+
+                      <h2 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug">
+                        {selectedTaskDetails.taskTitle || selectedTaskDetails.title || "Untitled Task"}
+                      </h2>
+                    </div>
+
+                    {/* Meta Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-slate-50/80 rounded-xl p-4 border border-slate-200/70">
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Project
+                        </span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <FolderOpen className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                          <span className="text-sm font-bold text-slate-800 truncate">
+                            {modalProject?.projectName || "Direct Project"}
+                          </span>
+                        </div>
+                        {modalProject?.clientName && (
+                          <span className="text-xs text-slate-500 block mt-0.5">
+                            Client: {modalProject.clientName}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Assigned Member
+                        </span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {(getUserName(modalAssigned?.member) || "U").charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-slate-800 block truncate">
+                              {getUserName(modalAssigned?.member) || "Unassigned"}
+                            </span>
+                            {modalAssigned?.role && (
+                              <span className="text-[10px] text-slate-500 font-medium capitalize">
+                                Role: {modalAssigned.role}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Team Lead
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-1 text-sm font-medium text-slate-700">
+                          <Users className="w-4 h-4 text-slate-400" />
+                          <span>{modalParticipants?.tlName || getProjectTeamLeadName(modalProject) || "N/A"}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Due Date
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-1 text-sm font-medium text-slate-700">
+                          <Calendar className="w-4 h-4 text-slate-400" />
+                          <span>
+                            {selectedTaskDetails.dueDate
+                              ? new Date(selectedTaskDetails.dueDate).toLocaleDateString()
+                              : "Not specified"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Description
+                      </h4>
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed min-h-[70px]">
+                        {selectedTaskDetails.description || "No detailed description provided for this task."}
+                      </div>
+                    </div>
+
+                    {/* Daily Updates Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <MessageSquare className="w-4 h-4 text-blue-600" />
+                          Daily Reports ({modalUpdates.length})
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => fetchTaskUpdates(selectedTaskDetails._id)}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-lg transition-colors"
+                        >
+                          Refresh Updates
+                        </button>
+                      </div>
+
+                      {loadingTaskUpdates[selectedTaskDetails._id] ? (
+                        <div className="flex items-center justify-center gap-2 text-xs text-slate-500 py-6 bg-slate-50 rounded-xl border border-slate-100">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                          Loading task reports...
+                        </div>
+                      ) : modalUpdates.length > 0 ? (
+                        <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                          {modalUpdates.map((update) => (
+                            <div
+                              key={update._id || update.id}
+                              className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center text-[10px] font-bold">
+                                    {(getUpdateMemberName(update) || "U").charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-800">
+                                    {getUpdateMemberName(update)}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-slate-400">
+                                  {update.createdAt ? new Date(update.createdAt).toLocaleString() : "No date"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                {update.updateText || update.message || update.description || "No report details provided."}
+                              </p>
+                              {typeof update.progress === "number" && (
+                                <div className="flex items-center gap-2 pt-1">
+                                  <div className="h-1.5 flex-1 rounded-full bg-slate-200 overflow-hidden">
+                                    <div
+                                      className={`h-1.5 rounded-full ${getProgressColor(update.progress)}`}
+                                      style={{ width: `${Math.max(0, Math.min(100, update.progress))}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-600">{update.progress}%</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-xs text-slate-400 bg-slate-50 rounded-xl border border-slate-100">
+                          No daily updates submitted yet for this task.
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedTaskDetails(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-xs transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
