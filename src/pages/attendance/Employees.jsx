@@ -297,7 +297,16 @@ export default function Employees() {
     setFormData({
       fullName: displayName,
       email: employee.email || "",
-      mobile: employee.mobile || "",
+      mobile:
+        employee.mobile ||
+        employee.phone ||
+        employee.phoneNumber ||
+        employee.contactNumber ||
+        employee.userId?.phoneNumber ||
+        employee.userId?.phone ||
+        employee.userID?.phoneNumber ||
+        employee.userID?.phone ||
+        "",
       designation: employee.designation || "",
       department:
         employee.department?.departmentName ||
@@ -310,7 +319,22 @@ export default function Employees() {
         : employee.dateOfBirth
         ? String(employee.dateOfBirth).split("T")[0]
         : "",
-      address: employee.address || employee.currentAddress || "",
+      address:
+        typeof employee.address === "string" && employee.address
+          ? employee.address
+          : employee.address?.line1
+          ? [
+              employee.address.line1,
+              employee.address.line2,
+              employee.address.city,
+              employee.address.state,
+              employee.address.pincode,
+            ]
+              .filter(Boolean)
+              .join(", ")
+          : employee.currentAddress ||
+            employee.permanentAddress ||
+            "",
       gender: employee.gender || "",
       bloodGroup: employee.bloodGroup || "",
     });
