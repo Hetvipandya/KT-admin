@@ -1178,15 +1178,14 @@ const fetchTasks = async (projectId = null) => {
 
     const milestoneToUse = milestoneId 
       ? visibleMilestones.find(m => isSameId(m._id, milestoneId)) || selectedMilestone
-      : selectedMilestone || visibleMilestones[0] || null;
+      : selectedMilestone || null;
 
-    if (!milestoneToUse) {
-      alert("Please select or create a milestone first");
-      return;
+    if (milestoneToUse) {
+      const selected = await loadSelectedMilestone(milestoneToUse._id || milestoneToUse.id);
+      setSelectedMilestone(selected || milestoneToUse);
+    } else {
+      setSelectedMilestone(null);
     }
-
-    const selected = await loadSelectedMilestone(milestoneToUse._id || milestoneToUse.id);
-    setSelectedMilestone(selected || milestoneToUse);
     
     const projId = selectedProject?._id || projectId || "";
     let assignedTo = "";
@@ -1353,8 +1352,8 @@ const fetchTasks = async (projectId = null) => {
         }
       }
 
-      if (!payload.projectId || !payload.milestoneId) {
-        alert("Please select both a project and a milestone before adding a task.");
+      if (!payload.projectId) {
+        alert("Please select a project before adding a task.");
         return;
       }
 
@@ -1742,13 +1741,22 @@ const fetchTasks = async (projectId = null) => {
                               <Target className="w-5 h-5 text-blue-500" />
                               Milestones
                             </h4>
-                            <button
-                              onClick={() => openAddMilestone(project._id)}
-                              className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                            >
-                              <Plus className="w-4 h-4" />
-                              Add Milestone
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openAddTask(project._id, null)}
+                                className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1 bg-green-50 px-2.5 py-1 rounded-md border border-green-200 hover:bg-green-100 transition-colors"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Add Task
+                              </button>
+                              <button
+                                onClick={() => openAddMilestone(project._id)}
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Add Milestone
+                              </button>
+                            </div>
                           </div>
 
                           {projectMilestonesList.length > 0 ? (
@@ -2609,24 +2617,27 @@ const fetchTasks = async (projectId = null) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Milestone *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Milestone (Optional)</label>
                   <select
                     name="milestoneId"
                     value={taskForm.milestoneId || ""}
                     onChange={async (e) => {
                       const mid = e.target.value;
                       setTaskForm((prev) => ({ ...prev, milestoneId: mid }));
-                      const milestone = (projectMilestones.length > 0 ? projectMilestones : milestones).find(
-                        (m) => isSameId(m._id || m.id, mid)
-                      );
-                      if (milestone) {
-                        await handleSelectMilestone(milestone);
+                      if (mid) {
+                        const milestone = (projectMilestones.length > 0 ? projectMilestones : milestones).find(
+                          (m) => isSameId(m._id || m.id, mid)
+                        );
+                        if (milestone) {
+                          await handleSelectMilestone(milestone);
+                        }
+                      } else {
+                        setSelectedMilestone(null);
                       }
                     }}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
                   >
-                    <option value="">Select Milestone</option>
+                    <option value="">Select Milestone (Optional)</option>
                     {(taskForm.projectId
                       ? projectMilestones.length > 0
                         ? projectMilestones
