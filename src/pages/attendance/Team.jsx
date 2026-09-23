@@ -2196,53 +2196,84 @@ const fetchTasks = async (projectId = null) => {
                 </div>
 
                 {(() => {
-                  // Compute options for TL, Employees, and Interns
+                  // Compute options for TL, Employees, and Interns with proper deduplication
+
+                  // 1. Team Leads
                   const tlMap = new Map();
+                  const seenTLEmails = new Set();
+                  const seenTLNames = new Set();
+
                   if (teamLeadOptions.length > 0) {
                     teamLeadOptions.forEach((lead) => {
                       const id = String(lead.value || lead._id || lead.id || "");
                       if (!id) return;
+                      const name = lead.name || "Team Lead";
+                      const email = String(lead.email || "").toLowerCase().trim();
+                      if (email) seenTLEmails.add(email);
+                      seenTLNames.add(name.toLowerCase().trim());
                       if (!tlMap.has(id)) {
-                        tlMap.set(id, { id, name: lead.name || "Team Lead" });
+                        tlMap.set(id, { id, name });
                       }
                     });
                   }
+
                   users.forEach((user) => {
                     const role = String(user.role || user.userRole || "").trim().toLowerCase();
                     if (role === "team lead" || role === "tl" || role === "teamlead") {
                       const id = normalizeId(user);
                       if (!id) return;
+                      const name = getUserName(user) || "Team Lead";
+                      const email = String(user.email || "").toLowerCase().trim();
+                      if ((email && seenTLEmails.has(email)) || seenTLNames.has(name.toLowerCase().trim())) {
+                        return;
+                      }
+                      if (email) seenTLEmails.add(email);
+                      seenTLNames.add(name.toLowerCase().trim());
                       if (!tlMap.has(id)) {
-                        tlMap.set(id, { id, name: getUserName(user) || "Team Lead" });
+                        tlMap.set(id, { id, name });
                       }
                     }
                   });
                   const allTLs = Array.from(tlMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
+                  // 2. Employees (prefer Employee record with Designation over plain User email)
                   const empMap = new Map();
+                  const seenEmpEmails = new Set();
+                  const seenEmpNames = new Set();
+
                   employees.forEach((emp) => {
                     const id = normalizeId(emp);
                     if (!id) return;
-                    const name = getEmployeeName(emp);
-                    const email = emp.email || emp.user?.email || "";
+                    const name = getEmployeeName(emp) || "Employee";
+                    const email = String(emp.email || emp.user?.email || "").toLowerCase().trim();
                     const designation = emp.designation || emp.jobTitle || emp.role || "";
+                    if (email) seenEmpEmails.add(email);
+                    seenEmpNames.add(name.toLowerCase().trim());
                     if (!empMap.has(id)) {
                       empMap.set(id, {
                         id,
-                        name: name || "Employee",
+                        name,
                         subText: designation || email || "Employee",
                       });
                     }
                   });
+
                   users.forEach((user) => {
                     const role = String(user.role || user.userRole || "").trim().toLowerCase();
                     if (role === "employee" || role === "staff") {
                       const id = normalizeId(user);
                       if (!id) return;
+                      const name = getUserName(user) || "Employee";
+                      const email = String(user.email || "").toLowerCase().trim();
+                      if ((email && seenEmpEmails.has(email)) || seenEmpNames.has(name.toLowerCase().trim())) {
+                        return;
+                      }
+                      if (email) seenEmpEmails.add(email);
+                      seenEmpNames.add(name.toLowerCase().trim());
                       if (!empMap.has(id)) {
                         empMap.set(id, {
                           id,
-                          name: getUserName(user) || "Employee",
+                          name,
                           subText: user.email || "Employee",
                         });
                       }
@@ -2250,16 +2281,47 @@ const fetchTasks = async (projectId = null) => {
                   });
                   const allEmps = Array.from(empMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
+                  // 3. Interns
                   const internMap = new Map();
+                  const seenInternEmails = new Set();
+                  const seenInternNames = new Set();
+
+                  employees.forEach((emp) => {
+                    const role = String(emp.role || emp.designation || "").trim().toLowerCase();
+                    if (role.includes("intern")) {
+                      const id = normalizeId(emp);
+                      if (!id) return;
+                      const name = getEmployeeName(emp) || "Intern";
+                      const email = String(emp.email || emp.user?.email || "").toLowerCase().trim();
+                      const designation = emp.designation || emp.jobTitle || emp.role || "";
+                      if (email) seenInternEmails.add(email);
+                      seenInternNames.add(name.toLowerCase().trim());
+                      if (!internMap.has(id)) {
+                        internMap.set(id, {
+                          id,
+                          name,
+                          subText: designation || email || "Intern",
+                        });
+                      }
+                    }
+                  });
+
                   users.forEach((user) => {
                     const role = String(user.role || user.userRole || "").trim().toLowerCase();
                     if (role.includes("intern")) {
                       const id = normalizeId(user);
                       if (!id) return;
+                      const name = getUserName(user) || "Intern";
+                      const email = String(user.email || "").toLowerCase().trim();
+                      if ((email && seenInternEmails.has(email)) || seenInternNames.has(name.toLowerCase().trim())) {
+                        return;
+                      }
+                      if (email) seenInternEmails.add(email);
+                      seenInternNames.add(name.toLowerCase().trim());
                       if (!internMap.has(id)) {
                         internMap.set(id, {
                           id,
-                          name: getUserName(user) || "Intern",
+                          name,
                           subText: user.email || "Intern",
                         });
                       }
