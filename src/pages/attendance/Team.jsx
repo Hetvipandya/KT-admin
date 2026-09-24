@@ -926,12 +926,18 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     }
     
     let assignedTo = "";
-    if (projectTeamMembers.employees[0]) {
+    if (proj?.employees?.[0]) {
+      assignedTo = normalizeId(proj.employees[0]);
+    } else if (proj?.teamLeadUser || proj?.teamLeadEmployee) {
+      assignedTo = normalizeId(proj.teamLeadUser || proj.teamLeadEmployee);
+    } else if (proj?.interns?.[0]) {
+      assignedTo = normalizeId(proj.interns[0]);
+    } else if (projectTeamMembers.employees[0]) {
       assignedTo = normalizeId(projectTeamMembers.employees[0]);
     } else if (projectTeamMembers.tl) {
-      assignedTo = projectTeamMembers.tl._id || projectTeamMembers.tl.id || "";
-    } else if (projectTeamMembers.interns[0]) {
-      assignedTo = normalizeId(projectTeamMembers.interns[0]);
+      assignedTo = normalizeId(projectTeamMembers.tl);
+    } else if (employees[0]) {
+      assignedTo = normalizeId(employees[0]);
     }
     
     setTaskForm({
@@ -971,9 +977,10 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     try {
       const assignedEmployeeId = taskForm.assignedTo || taskForm.assignedEmployee;
       
-      const assignedEmployee = users.find(user => 
-        isSameId(user._id, assignedEmployeeId)
-      ) || employees.find(emp => isSameId(emp._id, assignedEmployeeId));
+      const assignedEmployee = 
+        findEntity(employees, assignedEmployeeId) || 
+        findEntity(users, assignedEmployeeId) || 
+        findEntity(teamLeadOptions, assignedEmployeeId);
       
       const payload = {
         projectId: taskForm.projectId || selectedProject?._id || selectedProject?.id || null,
@@ -988,7 +995,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
         priority: taskForm.priority || "medium",
         progress: Number(taskForm.progress) || 0,
         status: taskForm.status || "pending",
-        assignedEmployeeName: assignedEmployee ? getUserName(assignedEmployee) : "",
+        assignedEmployeeName: assignedEmployee ? (getUserName(assignedEmployee) || getEmployeeName(assignedEmployee)) : "",
       };
 
       if (!payload.projectId) {
@@ -1180,7 +1187,113 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     }
   };
 
+  const getTaskAssigneeOptions = () => {
+    const projectMembers = [];
+    const seenProjectIds = new Set();
+
+    // 1. Team Lead
+    if (projectTeamMembers.tl) {
+      const id = normalizeId(projectTeamMembers.tl);
+      if (id) {
+        seenProjectIds.add(id);
+        projectMembers.push({
+          id,
+          _id: id,
+          name: getUserName(projectTeamMembers.tl) || getEmployeeName(projectTeamMembers.tl),
+          role: "Team Lead",
+        });
+      }
+    }
+
+    // 2. Project Employees
+    (Array.isArray(projectTeamMembers.employees) ? projectTeamMembers.employees : []).forEach((emp) => {
+      const id = normalizeId(emp);
+      if (id && !seenProjectIds.has(id)) {
+        seenProjectIds.add(id);
+        projectMembers.push({
+          id,
+          _id: id,
+          name: getEmployeeName(emp) || getUserName(emp),
+          role: "Employee",
+        });
+      }
+    });
+
+    // 3. Project Interns
+    (Array.isArray(projectTeamMembers.interns) ? projectTeamMembers.interns : []).forEach((intern) => {
+      const id = normalizeId(intern);
+      if (id && !seenProjectIds.has(id)) {
+        seenProjectIds.add(id);
+        projectMembers.push({
+          id,
+          _id: id,
+          name: getUserName(intern) || getEmployeeName(intern),
+          role: "Intern",
+        });
+      }
+    });
+
+    // 4. All Other Company Employees / Users
+    const otherEmployees = [];
+    const seenOtherIds = new Set([...seenProjectIds]);
+    const seenEmails = new Set();
+    const seenNames = new Set();
+
+    (Array.isArray(employees) ? employees : []).forEach((emp) => {
+      const id = normalizeId(emp);
+      if (!id || seenOtherIds.has(id)) return;
+      const name = getEmployeeName(emp) || getUserName(emp);
+      if (!name || name === "Unknown") return;
+      const email = String(emp.email || emp.user?.email || "").toLowerCase().trim();
+      const role = emp.designation || emp.jobTitle || emp.role || "Employee";
+
+      seenOtherIds.add(id);
+      if (email) seenEmails.add(email);
+      seenNames.add(name.toLowerCase());
+      otherEmployees.push({
+        id,
+        _id: id,
+        name,
+        role,
+      });
+    });
+
+    (Array.isArray(users) ? users : []).forEach((user) => {
+      const id = normalizeId(user);
+      if (!id || seenOtherIds.has(id)) return;
+      const name = getUserName(user);
+      if (!name || name === "Unknown") return;
+      const email = String(user.email || "").toLowerCase().trim();
+      if ((email && seenEmails.has(email)) || seenNames.has(name.toLowerCase())) {
+        return;
+      }
+      const role = user.role || user.userRole || user.designation || "Employee";
+
+      seenOtherIds.add(id);
+      if (email) seenEmails.add(email);
+      seenNames.add(name.toLowerCase());
+      otherEmployees.push({
+        id,
+        _id: id,
+        name,
+        role,
+      });
+    });
+
+    otherEmployees.sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      projectMembers,
+      otherEmployees,
+      allAssignees: [...projectMembers, ...otherEmployees],
+    };
+  };
+
   const getAvailableTaskAssignees = () => {
+    return getTaskAssigneeOptions().allAssignees;
+  };
+
+  const _old_getAvailableTaskAssignees = () => {
     const assignees = [];
     
     if (projectTeamMembers.tl) {
@@ -2426,13 +2539,41 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   >
-                    <option value="">Select Team Member</option>
-                    {getAvailableTaskAssignees().map((member) => (
+                    {(() => {
+                      const { projectMembers, otherEmployees, allAssignees } = getTaskAssigneeOptions();
+                      return (
+                        <>
+                          <option value="">Select Assignee / Employee</option>
+                          {projectMembers.length > 0 && (
+                            <optgroup label="Project Team Members">
+                              {projectMembers.map((member) => (
+                                <option key={member.id} value={member.id}>
+                                  {member.name} ({member.role})
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {otherEmployees.length > 0 && (
+                            <optgroup label={projectMembers.length > 0 ? "Other Employees" : "All Employees"}>
+                              {otherEmployees.map((emp) => (
+                                <option key={emp.id} value={emp.id}>
+                                  {emp.name} ({emp.role})
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {allAssignees.length === 0 && (
+                            <option value="" disabled>No employees available</option>
+                          )}
+                        </>
+                      );
+                    })()}
+                    {false && getAvailableTaskAssignees().map((member) => (
                       <option key={member._id || member.id} value={member._id || member.id}>
                         {getUserName(member)} ({member.role})
                       </option>
                     ))}
-                    {getAvailableTaskAssignees().length === 0 && users.map((user) => (
+                    {false && users.map((user) => (
                       <option key={user._id} value={user._id}>
                         {getUserName(user)}
                       </option>
