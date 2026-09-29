@@ -1345,10 +1345,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
               </span>
               <span className="text-[11px] text-slate-500 font-medium">Workspaces</span>
             </div>
-            <div className="mt-1 text-[11px] text-blue-600 font-medium flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              <span>Active client pipelines</span>
-            </div>
           </div>
 
           {/* Card 2: Total Tasks */}
@@ -1366,10 +1362,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                 {totalTasksCount}
               </span>
               <span className="text-[11px] text-slate-500 font-medium">Assigned</span>
-            </div>
-            <div className="mt-1 text-[11px] text-indigo-600 font-medium flex items-center gap-1">
-              <Layers className="w-3 h-3" />
-              <span>Across all projects</span>
             </div>
           </div>
 
@@ -1389,10 +1381,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
               </span>
               <span className="text-[11px] text-slate-500 font-medium">Active</span>
             </div>
-            <div className="mt-1 text-[11px] text-amber-600 font-medium flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Under review & testing</span>
-            </div>
           </div>
 
           {/* Card 4: Completed Tasks */}
@@ -1410,12 +1398,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                 {completedTasksCount}
               </span>
               <span className="text-[11px] text-slate-500 font-medium">({overallProgress}% Done)</span>
-            </div>
-            <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1 overflow-hidden">
-              <div
-                className="bg-emerald-500 h-1 rounded-full transition-all duration-500"
-                style={{ width: `${overallProgress}%` }}
-              />
             </div>
           </div>
         </div>
