@@ -6,6 +6,7 @@ import {
   Briefcase, 
   Clock, 
   ChevronRight,
+  ChevronDown,
   Search,
   Filter,
   MoreVertical,
@@ -1080,11 +1081,10 @@ const fetchAllMembers = async () => {
           
           <div className="flex gap-2">
             <div className="relative flex-1 sm:flex-none">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
-                className="w-full sm:w-40 pl-8.5 pr-8 py-2 text-sm border border-slate-200/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white appearance-none cursor-pointer shadow-2xs font-medium text-slate-700"
+                className="w-full sm:w-40 pl-3.5 pr-8 py-2 text-sm border border-slate-200/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white appearance-none cursor-pointer shadow-2xs font-medium text-slate-700"
               >
                 {roles.map(role => (
                   <option key={role} value={role}>
@@ -1092,14 +1092,14 @@ const fetchAllMembers = async () => {
                   </option>
                 ))}
               </select>
+              <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             </div>
 
             <div className="relative flex-1 sm:flex-none">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full sm:w-36 pl-8.5 pr-8 py-2 text-sm border border-slate-200/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white appearance-none cursor-pointer shadow-2xs font-medium text-slate-700"
+                className="w-full sm:w-36 pl-3.5 pr-8 py-2 text-sm border border-slate-200/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white appearance-none cursor-pointer shadow-2xs font-medium text-slate-700"
               >
                 {statuses.map(status => (
                   <option key={status} value={status}>
@@ -1107,6 +1107,7 @@ const fetchAllMembers = async () => {
                   </option>
                 ))}
               </select>
+              <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             </div>
           </div>
         </div>

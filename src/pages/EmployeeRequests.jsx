@@ -160,8 +160,8 @@ const EmployeeRequests = () => {
 
   const filteredUsers = users
     .filter(user => {
-      const role = user?.role || 'No Role';
-      if (role.toLowerCase() === 'admin') return false;
+      const role = (user?.role || 'No Role').toLowerCase().trim();
+      if (role === 'admin' || role === 'accountant') return false;
       
       const searchMatch = user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
