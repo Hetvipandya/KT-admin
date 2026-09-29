@@ -26,6 +26,7 @@ import {
   Layers
 } from "lucide-react";
 import { useConfirm } from "../../components/common/ConfirmDialog";
+import { isFinanceOrExcludedUser, filterOutFinanceUsers } from "../../utils/roleFilters";
 
 const BASE_URL =
   "https://kt-backend-1.onrender.com/api/projectManage/project";
@@ -420,13 +421,27 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     });
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const res = await axios.get(EMPLOYEE_URL);
+      const empData = res.data.data || res.data.employees || res.data || [];
+      const list = Array.isArray(empData) ? empData : [];
+      setEmployees(filterOutFinanceUsers(list));
+    } catch (error) {
+      console.error("Employees fetch error:", error);
+      setEmployees([]);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const res = await axios.get(USER_URL);
-      const userData = res.data.data || res.data.users || res.data;
-      setUsers(userData || []);
+      const userData = res.data.data || res.data.users || res.data || [];
+      const list = Array.isArray(userData) ? userData : [];
+      setUsers(filterOutFinanceUsers(list));
     } catch (error) {
       console.error("Users fetch error:", error);
+      setUsers([]);
     }
   };
 
@@ -447,8 +462,11 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
       const normalizedOptions = teamLeadsData
         .map((lead) => {
           const teamLeadRecord = lead?.teamLead || lead?.lead || lead?.user || lead?.employee || null;
-          const interns = teamLeadRecord?.interns || lead?.interns || [];
-          const employees = teamLeadRecord?.employees || lead?.employees || teamLeadRecord?.teamMembers || [];
+          if (lead && isFinanceOrExcludedUser(lead)) return null;
+          if (teamLeadRecord && isFinanceOrExcludedUser(teamLeadRecord)) return null;
+
+          const interns = (teamLeadRecord?.interns || lead?.interns || []).filter((i) => !isFinanceOrExcludedUser(i));
+          const employees = (teamLeadRecord?.employees || lead?.employees || teamLeadRecord?.teamMembers || []).filter((e) => !isFinanceOrExcludedUser(e));
 
           const leadId =
             teamLeadRecord?.userId ||
@@ -694,17 +712,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
       setLoading(false);
     }
   };
-
-  const fetchEmployees = async () => {
-    try {
-      const res = await axios.get(EMPLOYEE_URL);
-      const employeeData = res.data.data || res.data.employees || res.data;
-      setEmployees(employeeData || []);
-    } catch (error) {
-      console.error("Employee fetch error:", error);
-    }
-  };
-
 
   const updateProjectTeamMembers = (project) => {
   if (!project) {

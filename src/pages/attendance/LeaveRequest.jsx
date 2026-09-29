@@ -17,6 +17,7 @@ import {
   User,
   ShieldCheck,
 } from "lucide-react";
+import { isFinanceOrExcludedUser } from "../../utils/roleFilters";
 
 const BASE_URL = "https://kt-backend-1.onrender.com/api/leave";
 
@@ -313,11 +314,14 @@ export default function LeaveRequest() {
       const normalized = leaveArray
         .filter((leave) => {
           if (!leave) return false;
+          if (isFinanceOrExcludedUser(leave)) return false;
 
           const employee =
             leave?.employeeId && typeof leave.employeeId === "object"
               ? leave.employeeId
               : leave?.employee || leave?.user || leave?.userId;
+
+          if (employee && isFinanceOrExcludedUser(employee)) return false;
 
           if (!employee || Object.keys(employee).length === 0) {
             const fallbackName = leave?.name || leave?.employeeName;

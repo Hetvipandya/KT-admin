@@ -21,6 +21,7 @@ import {
   Clock,
   RefreshCw
 } from 'lucide-react';
+import { isFinanceOrExcludedUser } from '../utils/roleFilters';
 
 const EmployeeRequests = () => {
   const [users, setUsers] = useState([]);
@@ -160,8 +161,7 @@ const EmployeeRequests = () => {
 
   const filteredUsers = users
     .filter(user => {
-      const role = (user?.role || 'No Role').toLowerCase().trim();
-      if (role === 'admin' || role === 'accountant') return false;
+      if (isFinanceOrExcludedUser(user)) return false;
       
       const searchMatch = user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||

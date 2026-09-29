@@ -25,6 +25,7 @@
     ExternalLink
   } from "lucide-react";
   import { useConfirm } from "../components/common/ConfirmDialog";
+  import { isFinanceOrExcludedUser, filterOutFinanceUsers } from "../utils/roleFilters";
 
   const UmbrellaIcon = ({ className = "h-5 w-5" }) => (
     <svg
@@ -203,7 +204,6 @@
         // Fetch employees from employee/list API
         const employeeResponse = await fetch("https://kt-backend-1.onrender.com/api/employee/list");
         const employeeData = await employeeResponse.json();
-        console.log("Employee API Response:", employeeData);
         
         let employees = [];
         if (Array.isArray(employeeData)) {
@@ -216,16 +216,17 @@
           employees = employeeData.employees;
         }
         
-        const employeeCount = Array.isArray(employees) ? employees.length : 0;
-        console.log("Employee Count:", employeeCount);
+        const filteredEmployees = filterOutFinanceUsers(employees);
+        const employeeCount = filteredEmployees.length;
 
         // Fetch interns from users/all API
         const usersResponse = await fetch("https://kt-backend-1.onrender.com/api/users/all");
         const usersData = await usersResponse.json();
         const users = usersData.users || usersData.data || [];
-        const internCount = users.filter((user) => user.role?.toLowerCase() === "intern").length;
+        const filteredUsers = filterOutFinanceUsers(users);
+        const internCount = filteredUsers.filter((user) => user.role?.toLowerCase() === "intern").length;
 
-        const formattedBirthdays = users
+        const formattedBirthdays = filteredUsers
           .map((user) => ({
             id: user._id || user.id,
             name: user.name || user.fullName || "N/A",
@@ -254,10 +255,11 @@
         });
         const data = await response.json();
         const teamLeads = data.teamLeads || data.data || data.teamlead || data.teams || [];
+        const filteredTeamLeads = filterOutFinanceUsers(Array.isArray(teamLeads) ? teamLeads : []);
 
         setDashboardCounts((prev) => ({
           ...prev,
-          teamLeadCount: Array.isArray(teamLeads) ? teamLeads.length : 0,
+          teamLeadCount: filteredTeamLeads.length,
         }));
       } catch (error) {
         console.error(error);
@@ -273,9 +275,12 @@
         const data = await response.json();
         let leaveArray = Array.isArray(data) ? data : data.leaves || data.data || [];
 
-        const hrApprovedLeaves = leaveArray.filter(
-          (leave) => leave.hrStatus?.toLowerCase() === "approved"
-        );
+        const hrApprovedLeaves = leaveArray.filter((leave) => {
+          if (!leave) return false;
+          if (isFinanceOrExcludedUser(leave)) return false;
+          if (leave.employeeId && isFinanceOrExcludedUser(leave.employeeId)) return false;
+          return leave.hrStatus?.toLowerCase() === "approved";
+        });
         setLeaves(hrApprovedLeaves);
       } catch (error) {
         console.error(error);
@@ -431,12 +436,21 @@ async function fetchHolidays() {
         const absentData = await absentResponse.json();
         const absentRecordsList = normalizeAttendanceRecords(absentData);
 
-        const normalizedAbsent = absentRecordsList.map((record, index) => ({
-          ...record,
-          _id: record._id || record.id || `absent-${index}`,
-          employeeName: record.employeeName || record.name || record.user?.name || record.employee?.name || "N/A",
-          role: record.role || record.user?.role || record.employee?.role || "N/A",
-        }));
+        const normalizedAbsent = absentRecordsList
+          .filter((record) => {
+            if (!record) return false;
+            if (isFinanceOrExcludedUser(record)) return false;
+            if (record.user && isFinanceOrExcludedUser(record.user)) return false;
+            if (record.employee && isFinanceOrExcludedUser(record.employee)) return false;
+            if (record.userId && isFinanceOrExcludedUser(record.userId)) return false;
+            return true;
+          })
+          .map((record, index) => ({
+            ...record,
+            _id: record._id || record.id || `absent-${index}`,
+            employeeName: record.employeeName || record.name || record.user?.name || record.employee?.name || "N/A",
+            role: record.role || record.user?.role || record.employee?.role || "N/A",
+          }));
 
         setAbsentRecords(normalizedAbsent);
 
@@ -449,6 +463,12 @@ async function fetchHolidays() {
 
         const todayKey = getLocalDateKey(new Date());
         const todayPresent = attendanceList.filter((record) => {
+          if (!record) return false;
+          if (isFinanceOrExcludedUser(record)) return false;
+          if (record.user && isFinanceOrExcludedUser(record.user)) return false;
+          if (record.employee && isFinanceOrExcludedUser(record.employee)) return false;
+          if (record.userId && isFinanceOrExcludedUser(record.userId)) return false;
+
           const recordDate = getLocalDateKey(getAttendanceDate(record));
           return getAttendanceStatus(record) === "present" && (!recordDate || recordDate === todayKey);
         });
@@ -467,12 +487,21 @@ async function fetchHolidays() {
           let attendanceData = normalizeAttendanceRecords(data);
 
           const todayKey = getLocalDateKey(new Date());
-          const absentOnly = attendanceData.filter((record) => {
+          const filteredAttendance = attendanceData.filter((record) => {
+            if (!record) return false;
+            if (isFinanceOrExcludedUser(record)) return false;
+            if (record.user && isFinanceOrExcludedUser(record.user)) return false;
+            if (record.employee && isFinanceOrExcludedUser(record.employee)) return false;
+            if (record.userId && isFinanceOrExcludedUser(record.userId)) return false;
+            return true;
+          });
+
+          const absentOnly = filteredAttendance.filter((record) => {
             const recordDate = getLocalDateKey(getAttendanceDate(record));
             return getAttendanceStatus(record) === "absent" && (!recordDate || recordDate === todayKey);
           });
 
-          const presentOnly = attendanceData.filter((record) => {
+          const presentOnly = filteredAttendance.filter((record) => {
             const recordDate = getLocalDateKey(getAttendanceDate(record));
             return getAttendanceStatus(record) === "present" && (!recordDate || recordDate === todayKey);
           });

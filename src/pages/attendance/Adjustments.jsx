@@ -1877,6 +1877,7 @@ import {
   RotateCcw,
   Clock,
 } from "lucide-react";
+import { isFinanceOrExcludedUser } from "../../utils/roleFilters";
 
 export default function Adjustments() {
   // ============================================================
@@ -2232,7 +2233,7 @@ export default function Adjustments() {
             const usersData = await usersRes.json();
             const usersList = usersData.users || usersData.data || [];
             usersList.forEach((user) => {
-              if (!user || !user._id) return;
+              if (!user || !user._id || isFinanceOrExcludedUser(user)) return;
               const name =
                 user.name ||
                 `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
@@ -2243,6 +2244,8 @@ export default function Adjustments() {
                 name: name,
                 employeeId: user.uniqueID || user.employeeID || user.employeeId || "",
                 roleType: user.role || "employee",
+                department: user.department || user.dept || "",
+                designation: user.designation || user.jobTitle || "",
               });
             });
           }
@@ -2257,7 +2260,7 @@ export default function Adjustments() {
             const empData = await empRes.json();
             const empList = empData.employees || empData.data || [];
             empList.forEach((emp) => {
-              if (!emp) return;
+              if (!emp || isFinanceOrExcludedUser(emp)) return;
               const userIdKey = emp.userID
                 ? String(emp.userID)
                 : emp._id
@@ -2286,6 +2289,8 @@ export default function Adjustments() {
                   existing.employeeId ||
                   "",
                 roleType: resolvedRole,
+                department: emp.department || emp.dept || existing.department || "",
+                designation: emp.designation || emp.jobTitle || existing.designation || "",
               });
             });
           }
@@ -2312,7 +2317,7 @@ export default function Adjustments() {
               const emp =
                 item.userId || item.employeeId || item.employee || {};
 
-              if (!emp || !emp._id) return;
+              if (!emp || !emp._id || isFinanceOrExcludedUser(emp)) return;
               const key = String(emp._id);
 
               if (!employeeMap.has(key)) {
@@ -2324,6 +2329,8 @@ export default function Adjustments() {
                     "Unknown Employee",
                   employeeId: emp.employeeID || emp.employeeId || "",
                   roleType: emp.role || "employee",
+                  department: emp.department || emp.dept || "",
+                  designation: emp.designation || emp.jobTitle || "",
                 });
               }
             });
@@ -2334,6 +2341,7 @@ export default function Adjustments() {
 
         const employeeList = Array.from(employeeMap.values())
           .filter((emp) => {
+            if (isFinanceOrExcludedUser(emp)) return false;
             const role = (emp.roleType || "").toLowerCase().trim();
             const id = (emp.employeeId || "").toUpperCase().trim();
             return role !== "admin" && !id.startsWith("ADMIN");

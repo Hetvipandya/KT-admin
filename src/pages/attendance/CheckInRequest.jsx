@@ -7,6 +7,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Modal from "../../components/common/Modal";
+import { isFinanceOrExcludedUser } from "../../utils/roleFilters";
 
 const ADMIN_ID = "6a23b5c49cd1507bfd5e3bcb";
 
@@ -268,6 +269,10 @@ export default function CheckInRequest() {
       const mappedRequests = normalized
         .filter((item) => {
           if (!item) return false;
+          if (isFinanceOrExcludedUser(item)) return false;
+          if (item.userId && isFinanceOrExcludedUser(item.userId)) return false;
+          if (item.employee && isFinanceOrExcludedUser(item.employee)) return false;
+
           const name =
             item.employeeName ||
             item.name ||

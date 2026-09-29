@@ -27,6 +27,7 @@ import {
   FolderOpen,
   FileText
 } from 'lucide-react';
+import { isFinanceOrExcludedUser } from '../../utils/roleFilters';
 
 const avatarColors = [
   'from-indigo-500 to-indigo-600',
@@ -393,15 +394,7 @@ const fetchAllMembers = async () => {
     const allMembers = usersList
       .filter((user) => {
         if (!user) return false;
-        const role = String(
-          user?.role ||
-          user?.userRole ||
-          ''
-        )
-          .toLowerCase()
-          .trim();
-
-        if (!role || role === 'admin') return false;
+        if (isFinanceOrExcludedUser(user)) return false;
 
         const name = user.name || user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
         const email = user.email || '';
@@ -428,6 +421,9 @@ const fetchAllMembers = async () => {
         // FIND EMPLOYEE RECORD
         // --------------------------------------
         const employee = findEmployee(user);
+        if (employee && isFinanceOrExcludedUser(employee)) {
+          return null;
+        }
 
         console.log(
           'USER:',
@@ -692,7 +688,8 @@ const fetchAllMembers = async () => {
           avatarColor:
             getAvatarColor(index)
         };
-      });
+      })
+      .filter(Boolean);
 
     console.log(
       'FINAL MEMBERS:',

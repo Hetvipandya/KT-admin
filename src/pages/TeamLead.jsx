@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { isFinanceOrExcludedUser, filterOutFinanceUsers } from "../utils/roleFilters";
 
 const BASE_URL = "https://kt-backend-1.onrender.com/api";
 
@@ -76,16 +77,18 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], 
     return idMatch || emailMatch || nameMatch;
   };
 
-  // 1. Available Interns: Only interns & NOT the current team lead
+  // 1. Available Interns: Only interns & NOT the current team lead & NOT finance
   const availableInterns = (interns || []).filter((intern) => {
     if (isCurrentLead(intern)) return false;
+    if (isFinanceOrExcludedUser(intern)) return false;
     const role = (intern.role || intern.designation || '').toLowerCase().trim();
     return role.includes('intern') || intern.isIntern === true || !role.includes('lead');
   });
 
-  // 2. Available Employees: Purely employees (NOT intern, NOT team lead, NOT admin, NOT current lead)
+  // 2. Available Employees: Purely employees (NOT intern, NOT team lead, NOT admin, NOT finance, NOT current lead)
   const availableEmployees = (employees || []).filter((emp) => {
     if (isCurrentLead(emp)) return false;
+    if (isFinanceOrExcludedUser(emp)) return false;
     const role = (emp.role || emp.designation || '').toLowerCase().trim();
     const isIntern = role.includes('intern') || emp.isIntern === true;
     const isTeamLead = role.includes('lead') || emp.isTeamLead === true;
@@ -755,17 +758,12 @@ const getDesignation = (lead) => {
         teamLeadsData = [];
       }
 
-      // Filter out admin users and deleted / invalid / unnamed team leads
+      // Filter out admin & finance users and deleted / invalid / unnamed team leads
       const filteredTeamLeads = teamLeadsData.filter((lead) => {
         if (!lead) return false;
-
-        const role = 
-          lead?.teamLead?.role?.toLowerCase().trim() ||
-          lead?.role?.toLowerCase().trim() ||
-          lead?.user?.role?.toLowerCase().trim() ||
-          lead?.teamLead?.user?.role?.toLowerCase().trim() ||
-          '';
-        if (role === 'admin') return false;
+        if (isFinanceOrExcludedUser(lead)) return false;
+        if (lead.teamLead && isFinanceOrExcludedUser(lead.teamLead)) return false;
+        if (lead.user && isFinanceOrExcludedUser(lead.user)) return false;
 
         const leadName = getUserName(lead);
         const leadEmail = getUserEmail(lead);
@@ -869,7 +867,7 @@ const getDesignation = (lead) => {
       const usersResponse = await axios.get(`${BASE_URL}/users/all`, { headers });
       const allUsers = usersResponse?.data?.users || [];
       const internUsers = allUsers.filter((user) => {
-        if (!user) return false;
+        if (!user || isFinanceOrExcludedUser(user)) return false;
         const name = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
         if (!name || name === "Unnamed" || name === "No Name" || name === "Unknown Employee" || name === "Unknown User") return false;
         return user.role?.toLowerCase().trim() === "intern";
@@ -886,7 +884,7 @@ const getDesignation = (lead) => {
       const employeesResponse = await axios.get(`${BASE_URL}/employee/list`, { headers });
       const allEmployees = employeesResponse?.data?.employees || [];
       const validEmployees = (Array.isArray(allEmployees) ? allEmployees : []).filter((emp) => {
-        if (!emp) return false;
+        if (!emp || isFinanceOrExcludedUser(emp)) return false;
         const name = emp.name || emp.fullName || `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
         if (!name || name === "Unnamed" || name === "No Name" || name === "Unknown Employee" || name === "Unknown User") return false;
         return true;

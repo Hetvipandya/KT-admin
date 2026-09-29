@@ -18,6 +18,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { useConfirm } from "../../components/common/ConfirmDialog";
+import { isFinanceOrExcludedUser, filterOutFinanceUsers } from "../../utils/roleFilters";
 
 const API_BASE =
   process.env.REACT_APP_API_URL ||
@@ -101,7 +102,7 @@ export default function Employees() {
       const data = await res.json();
 
       if (data.success) {
-        setEmployees(data.employees || []);
+        setEmployees(filterOutFinanceUsers(data.employees || []));
       } else {
         console.error(data.message || "Failed to fetch employees");
       }
@@ -465,6 +466,7 @@ export default function Employees() {
   // FILTER
   // =========================
   const filteredEmployees = employees.filter((emp) => {
+    if (isFinanceOrExcludedUser(emp)) return false;
     const fullName = `${emp.firstName || ""} ${
       emp.lastName || ""
     }`.toLowerCase();

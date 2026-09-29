@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../components/common/ConfirmDialog";
 import { FileText, Edit3, ClipboardList, CheckCircle, XCircle } from "lucide-react";
+import { isFinanceOrExcludedUser, filterOutFinanceUsers } from "../utils/roleFilters";
 
 const Performance = () => {
   const { confirm, confirmationDialog } = useConfirm();
@@ -170,7 +171,15 @@ const Performance = () => {
       console.log("Performance API:", data);
 
       if (data.success) {
-        setPerformances(Array.isArray(data.data) ? data.data : []);
+        const rawPerfs = Array.isArray(data.data) ? data.data : [];
+        const filteredPerfs = rawPerfs.filter((perf) => {
+          if (!perf) return false;
+          if (isFinanceOrExcludedUser(perf)) return false;
+          if (perf.employeeID && isFinanceOrExcludedUser(perf.employeeID)) return false;
+          if (perf.employee && isFinanceOrExcludedUser(perf.employee)) return false;
+          return true;
+        });
+        setPerformances(filteredPerfs);
       }
     } catch (err) {
       console.error("Error fetching performances:", err);
@@ -221,10 +230,6 @@ const Performance = () => {
       const usersData = await usersResponse.json();
       const teamLeadData = await teamLeadResponse.json();
 
-      console.log("Employee API:", employeeData);
-      console.log("Users API:", usersData);
-      console.log("Team Lead API:", teamLeadData);
-
       // ========================================================
       // 1. EMPLOYEES
       // ========================================================
@@ -242,6 +247,7 @@ const Performance = () => {
       }
 
       const employees = employeeList
+        .filter((emp) => emp && !isFinanceOrExcludedUser(emp))
         .map((employee) => ({
           _id:
             employee._id ||
@@ -283,11 +289,10 @@ const Performance = () => {
           [];
 
       const interns = users
-        .filter(
-          (user) =>
-            String(user.role || "").toLowerCase() ===
-            "intern"
-        )
+        .filter((user) => {
+          if (!user || isFinanceOrExcludedUser(user)) return false;
+          return String(user.role || "").toLowerCase() === "intern";
+        })
         .map((intern) => ({
           _id:
             intern._id ||
@@ -327,6 +332,12 @@ const Performance = () => {
 
       const teamLeads = Array.isArray(teamLeadList)
         ? teamLeadList
+            .filter((tl) => {
+              if (!tl || isFinanceOrExcludedUser(tl)) return false;
+              const u = tl.user || tl.employee || tl.teamLead;
+              if (u && isFinanceOrExcludedUser(u)) return false;
+              return true;
+            })
             .map((teamLead) => {
               const user =
                 teamLead.user ||

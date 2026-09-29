@@ -17,6 +17,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { isFinanceOrExcludedUser } from '../../utils/roleFilters';
 
 const ATTENDANCE_URL =
   'https://kt-backend-1.onrender.com/api/attendance/admin/all';
@@ -962,6 +963,11 @@ export default function AttendanceLogs() {
       // Map attendance items by User Mongo ID
       const attendanceMap = new Map();
       attendanceItems.forEach((item) => {
+        if (!item || isFinanceOrExcludedUser(item)) return;
+        if (item.user && isFinanceOrExcludedUser(item.user)) return;
+        if (item.employee && isFinanceOrExcludedUser(item.employee)) return;
+        if (item.userId && isFinanceOrExcludedUser(item.userId)) return;
+
         const uId =
           item?.employee?._id ||
           item?.user?._id ||
@@ -973,7 +979,7 @@ export default function AttendanceLogs() {
         }
       });
 
-      // 2. Fetch all users from /users/all to guarantee HR, TL, Employee are all in table (Excluding Admin)
+      // 2. Fetch all users from /users/all to guarantee HR, TL, Employee are all in table (Excluding Admin & Finance)
       try {
         const usersUrl = 'https://kt-backend-1.onrender.com/api/users/all';
         const usersRes = await fetch(usersUrl, { method: 'GET', headers });
@@ -981,9 +987,7 @@ export default function AttendanceLogs() {
           const usersData = await usersRes.json();
           const usersList = usersData.users || usersData.data || [];
           usersList.forEach((user) => {
-            if (!user || !user._id) return;
-            const userRole = String(user.role || '').toLowerCase().trim();
-            if (userRole === 'admin') return; // Exclude Admin
+            if (!user || !user._id || isFinanceOrExcludedUser(user)) return;
 
             const uIdKey = String(user._id);
             if (!attendanceMap.has(uIdKey)) {
@@ -1199,18 +1203,13 @@ export default function AttendanceLogs() {
         console.warn("Local adjustments merge error:", lErr);
       }
 
-      // Filter out admin users from attendance logs list
+      // Filter out admin & finance users from attendance logs list
       const combinedLogs = Array.from(attendanceMap.values()).filter((item) => {
-        const userRole = String(
-          item?.user?.role ||
-          item?.employee?.role ||
-          item?.userId?.role ||
-          item?.userType ||
-          item?.role ||
-          ''
-        ).toLowerCase().trim();
-
-        return userRole !== 'admin';
+        if (!item || isFinanceOrExcludedUser(item)) return false;
+        if (item.user && isFinanceOrExcludedUser(item.user)) return false;
+        if (item.employee && isFinanceOrExcludedUser(item.employee)) return false;
+        if (item.userId && isFinanceOrExcludedUser(item.userId)) return false;
+        return true;
       });
 
       const mappedLogs = combinedLogs.map(mapLog);
