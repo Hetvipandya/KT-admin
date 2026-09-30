@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   CalendarDays,
@@ -114,6 +114,28 @@ const formatRole = (role) => {
   return role || "Unknown";
 };
 
+const normalizeLeaveType = (type) => {
+  const normalized = String(type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  const aliases = {
+    sick: "sick leave",
+    casual: "casual leave",
+    annual: "annual leave",
+    maternity: "maternity leave",
+    paternity: "paternity leave",
+  };
+
+  return aliases[normalized] || normalized;
+};
+
+const formatLeaveType = (type) =>
+  normalizeLeaveType(type)
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
 const formatDuration = (leave) => {
   const rawLeave = leave?.rawLeave || leave || {};
   const totalDays = Number(rawLeave?.totalDays ?? leave?.totalDays ?? 0);
@@ -186,6 +208,7 @@ export default function LeaveRequest() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const filterDropdownRef = useRef(null);
 
   const [selectedLeave, setSelectedLeave] = useState(null);
 
@@ -577,6 +600,28 @@ export default function LeaveRequest() {
     getCurrentUser();
     fetchLeaves();
   }, []);
+
+  useEffect(() => {
+    if (!showFilters) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!filterDropdownRef.current?.contains(event.target)) {
+        setShowFilters(false);
+      }
+    };
+
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setShowFilters(false);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showFilters]);
 
   // ==========================================================
   // WORKFLOW
@@ -1060,6 +1105,8 @@ export default function LeaveRequest() {
 
       const leaveType =
         request.leaveType?.toLowerCase() || "";
+      const normalizedLeaveType = normalizeLeaveType(request.leaveType);
+      const leaveTypeLabel = formatLeaveType(request.leaveType).toLowerCase();
 
       const reason =
         request.reason?.toLowerCase() || "";
@@ -1069,11 +1116,12 @@ export default function LeaveRequest() {
         name.includes(search) ||
         role.includes(search) ||
         leaveType.includes(search) ||
+        leaveTypeLabel.includes(search) ||
         reason.includes(search);
 
       const matchesType =
         filterType === "all" ||
-        leaveType === filterType;
+        normalizedLeaveType === filterType;
 
       return (
         matchesSearch &&
@@ -1085,6 +1133,11 @@ export default function LeaveRequest() {
     searchTerm,
     filterType,
   ]);
+
+  const availableLeaveTypes = useMemo(
+    () => [...new Set(requests.map((request) => normalizeLeaveType(request.leaveType)).filter(Boolean))].sort(),
+    [requests]
+  );
  
   // ==========================================================
   // DATE
@@ -1132,9 +1185,7 @@ export default function LeaveRequest() {
   // ==========================================================
 
   const getLeaveTypeStyle = (type) => {
-    switch (
-      String(type || "").toLowerCase()
-    ) {
+    switch (normalizeLeaveType(type)) {
       case "sick leave":
         return "bg-rose-50 text-rose-700 border-rose-200";
 
@@ -1160,9 +1211,7 @@ export default function LeaveRequest() {
   // ==========================================================
 
   const getLeaveTypeIcon = (type) => {
-    switch (
-      String(type || "").toLowerCase()
-    ) {
+    switch (normalizeLeaveType(type)) {
       case "sick leave":
         return (
           <AlertCircle className="w-4 h-4" />
@@ -1455,74 +1504,67 @@ export default function LeaveRequest() {
                 />
               </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setShowFilters(
-                    (previous) =>
-                      !previous
-                  )
-                }
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
-              >
-                <Filter className="w-4 h-4" />
+              <div className="relative" ref={filterDropdownRef}>
+                <button
+                  type="button"
+                  aria-expanded={showFilters}
+                  aria-haspopup="true"
+                  onClick={() =>
+                    setShowFilters(
+                      (previous) =>
+                        !previous
+                    )
+                  }
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                >
+                  <Filter className="w-4 h-4" />
 
-                Filters
+                  Filters
 
-                <ChevronDown
-                  className={`w-4 h-4 transition ${
-                    showFilters
-                      ? "rotate-180"
-                      : ""
-                  }`}
-                />
-              </button>
-            </div>
+                  <ChevronDown
+                    className={`w-4 h-4 transition ${
+                      showFilters
+                        ? "rotate-180"
+                        : ""
+                    }`}
+                  />
+                </button>
 
-            {showFilters && (
-              <div className="mt-3 pt-3 border-t border-gray-200">
+                {showFilters && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                    <p className="border-b border-gray-100 px-3 py-2 text-xs font-semibold text-gray-600">
+                      Leave Type
+                    </p>
 
-                <div className="max-w-xs">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    Leave Type
-                  </label>
-
-                  <select
-                    value={filterType}
-                    onChange={(e) =>
-                      setFilterType(
-                        e.target.value
-                      )
-                    }
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white"
-                  >
-                    <option value="all">
-                      All Types
-                    </option>
-
-                    <option value="sick leave">
-                      Sick Leave
-                    </option>
-
-                    <option value="casual leave">
-                      Casual Leave
-                    </option>
-
-                    <option value="annual leave">
-                      Annual Leave
-                    </option>
-
-                    <option value="maternity leave">
-                      Maternity Leave
-                    </option>
-
-                    <option value="paternity leave">
-                      Paternity Leave
-                    </option>
-                  </select>
-                </div>
+                    <div className="max-h-72 overflow-y-auto p-1.5">
+                      {[{ value: "all", label: "All Types" }, ...availableLeaveTypes.map((type) => ({
+                        value: type,
+                        label: formatLeaveType(type),
+                      }))].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            setFilterType(option.value);
+                            setShowFilters(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm transition ${
+                            filterType === option.value
+                              ? "bg-blue-50 font-semibold text-blue-700"
+                              : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {option.label}
+                          {filterType === option.value && (
+                            <Check className="h-4 w-4" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* ==================================================
@@ -1665,7 +1707,7 @@ export default function LeaveRequest() {
                                 request.leaveType
                               )}
 
-                              {request.leaveType} 
+                              {formatLeaveType(request.leaveType)}
                             </span>
                           </td>
 
@@ -1827,7 +1869,7 @@ export default function LeaveRequest() {
                             request.leaveType
                           )}
 
-                          {request.leaveType}
+                          {formatLeaveType(request.leaveType)}
                         </span>
                       </div>
 
@@ -2084,7 +2126,7 @@ export default function LeaveRequest() {
                       selectedLeave.leaveType
                     )}
 
-                    {selectedLeave.leaveType}
+                    {formatLeaveType(selectedLeave.leaveType)}
                   </span>
                 </div>
 
@@ -2531,7 +2573,7 @@ export default function LeaveRequest() {
                     {actionModal.leave.name}
                   </p>
                   <p className="text-gray-500 mt-0.5">
-                    {formatRole(actionModal.leave.role)} • {actionModal.leave.leaveType}
+                    {formatRole(actionModal.leave.role)} • {formatLeaveType(actionModal.leave.leaveType)}
                   </p>
                 </div>
                 <div className="text-right">

@@ -919,6 +919,12 @@ export default function AttendanceLogs() {
   const [selectedLog, setSelectedLog] =
     useState(null);
 
+  const [showExportOptions, setShowExportOptions] =
+    useState(false);
+
+  const [exportingMonth, setExportingMonth] =
+    useState(false);
+
   const token =
     typeof window !== 'undefined'
       ? localStorage.getItem('token')
@@ -1516,10 +1522,10 @@ export default function AttendanceLogs() {
   /* =========================================================
      EXPORT EXCEL
   ========================================================= */
-  const exportToExcel = () => {
+  const downloadExcel = (exportLogs, fileName) => {
     try {
       const exportData =
-        filteredAndSortedLogs.map(
+        exportLogs.map(
           (log) => ({
             'Employee Name': log.name,
             Email: log.email,
@@ -1572,9 +1578,7 @@ export default function AttendanceLogs() {
 
       XLSX.writeFile(
         wb,
-        `Attendance_Logs_${new Date()
-          .toLocaleDateString('en-IN')
-          .replace(/\//g, '-')}.xlsx`
+        fileName
       );
     } catch (error) {
       console.error(
@@ -1585,6 +1589,79 @@ export default function AttendanceLogs() {
       alert(
         'Failed to export data'
       );
+    }
+  };
+
+  const exportToExcel = () => {
+    downloadExcel(
+      filteredAndSortedLogs,
+      `Attendance_Logs_${selectedDate}.xlsx`
+    );
+    setShowExportOptions(false);
+  };
+
+  const exportMonthToExcel = async () => {
+    setExportingMonth(true);
+
+    try {
+      if (!token) {
+        throw new Error('Please login to export attendance logs.');
+      }
+
+      const monthKey = selectedDate.slice(0, 7);
+      const [year, month] = monthKey.split('-').map(Number);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const monthDates = Array.from({ length: daysInMonth }, (_, index) =>
+        `${monthKey}-${String(index + 1).padStart(2, '0')}`
+      );
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+      const attendanceItems = [];
+
+      for (let index = 0; index < monthDates.length; index += 5) {
+        const dateBatch = monthDates.slice(index, index + 5);
+        const batchItems = await Promise.all(dateBatch.map(async (date) => {
+          const url = `${ATTENDANCE_URL}?date=${encodeURIComponent(date)}`;
+          const response = await fetch(url, { method: 'GET', headers });
+
+          if (!response.ok) {
+            throw new Error(`Unable to load attendance for ${date}.`);
+          }
+
+          return normalizeLogs(await response.json());
+        }));
+
+        attendanceItems.push(...batchItems.flat());
+      }
+
+      const monthLogs = attendanceItems
+        .filter((item) => {
+          if (!item || isFinanceOrExcludedUser(item)) return false;
+          if (item.user && isFinanceOrExcludedUser(item.user)) return false;
+          if (item.employee && isFinanceOrExcludedUser(item.employee)) return false;
+          if (item.userId && isFinanceOrExcludedUser(item.userId)) return false;
+          return true;
+        })
+        .map(mapLog)
+        .sort((firstLog, secondLog) => {
+          const nameOrder = firstLog.name.localeCompare(secondLog.name, 'en', {
+            sensitivity: 'base',
+          });
+
+          if (nameOrder !== 0) return nameOrder;
+
+          return new Date(firstLog.date).getTime() - new Date(secondLog.date).getTime();
+        });
+
+      downloadExcel(monthLogs, `Attendance_Logs_${monthKey}.xlsx`);
+      setShowExportOptions(false);
+    } catch (exportError) {
+      console.error('Monthly export error:', exportError);
+      alert(exportError.message || 'Failed to export monthly attendance data');
+    } finally {
+      setExportingMonth(false);
     }
   };
 
@@ -1664,7 +1741,7 @@ export default function AttendanceLogs() {
 
           {/* EXPORT */}
           <button
-            onClick={exportToExcel}
+            onClick={() => setShowExportOptions(true)}
             className="bg-emerald-600 text-white px-2 sm:px-4 py-1 hover:bg-emerald-700 flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium"
           >
             <FileSpreadsheet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -1680,6 +1757,65 @@ export default function AttendanceLogs() {
 
         </div>
       </div>
+
+      {showExportOptions && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onClick={() => !exportingMonth && setShowExportOptions(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-white shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="attendance-export-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h2 id="attendance-export-title" className="font-semibold text-gray-800">
+                Download Attendance
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowExportOptions(false)}
+                aria-label="Close export options"
+                className="p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                disabled={exportingMonth}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-2 p-4">
+              <button
+                type="button"
+                onClick={exportToExcel}
+                className="flex w-full items-center gap-3 border border-gray-200 px-3 py-3 text-left hover:bg-gray-50"
+                disabled={exportingMonth}
+              >
+                <Calendar className="h-5 w-5 text-emerald-600" />
+                <span>
+                  <span className="block text-sm font-medium text-gray-800">Date-wise</span>
+                  <span className="block text-xs text-gray-500">{formatIndianDate(selectedDate)}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={exportMonthToExcel}
+                className="flex w-full items-center gap-3 border border-gray-200 px-3 py-3 text-left hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+                disabled={exportingMonth}
+              >
+                <Calendar className="h-5 w-5 text-blue-600" />
+                <span>
+                  <span className="block text-sm font-medium text-gray-800">
+                    {exportingMonth ? 'Preparing monthly file...' : 'Month-wise'}
+                  </span>
+                  <span className="block text-xs text-gray-500">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MAIN CARD */}
       <div className="bg-white border border-gray-300">

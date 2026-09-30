@@ -6,14 +6,11 @@ const BASE_URL = "https://kt-backend-1.onrender.com/api";
 
 // Modal Component for Assignments
 const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], onSave, departmentName }) => {
-  const [selectedInterns, setSelectedInterns] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('interns');
 
   useEffect(() => {
     if (lead && isOpen) {
-      setSelectedInterns(lead.assignedInterns || []); 
       setSelectedEmployees(lead.assignedEmployees || []);
     }
   }, [lead, isOpen]);
@@ -77,15 +74,7 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], 
     return idMatch || emailMatch || nameMatch;
   };
 
-  // 1. Available Interns: Only interns & NOT the current team lead & NOT finance
-  const availableInterns = (interns || []).filter((intern) => {
-    if (isCurrentLead(intern)) return false;
-    if (isFinanceOrExcludedUser(intern)) return false;
-    const role = (intern.role || intern.designation || '').toLowerCase().trim();
-    return role.includes('intern') || intern.isIntern === true || !role.includes('lead');
-  });
-
-  // 2. Available Employees: Purely employees (NOT intern, NOT team lead, NOT admin, NOT finance, NOT current lead)
+  // Available Employees: Purely employees (NOT intern, NOT team lead, NOT admin, NOT finance, NOT current lead)
   const availableEmployees = (employees || []).filter((emp) => {
     if (isCurrentLead(emp)) return false;
     if (isFinanceOrExcludedUser(emp)) return false;
@@ -96,14 +85,6 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], 
     return !isIntern && !isTeamLead && !isAdmin;
   });
 
-  const handleInternToggle = (internId) => {
-    setSelectedInterns(prev => 
-      prev.includes(internId) 
-        ? prev.filter(id => id !== internId)
-        : [...prev, internId]
-    );
-  };
-
   const handleEmployeeToggle = (employeeId) => {
     setSelectedEmployees(prev =>
       prev.includes(employeeId)
@@ -113,18 +94,13 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], 
   };
 
   const handleSave = async () => {
-    if (activeTab === 'interns' && selectedInterns.length === 0) {
-      alert("Please select at least one intern.");
-      return;
-    }
-    if (activeTab === 'employees' && selectedEmployees.length === 0) {
+    if (selectedEmployees.length === 0) {
       alert("Please select at least one employee.");
       return;
     }
 
     setSaving(true);
     await onSave({
-      internIds: selectedInterns,
       employeeIds: selectedEmployees,
       leadId: lead._id
     });
@@ -132,20 +108,12 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], 
     onClose();
   };
 
-  const selectAll = (type) => {
-    if (type === 'interns') {
-      setSelectedInterns(availableInterns.map(intern => intern._id));
-    } else {
-      setSelectedEmployees(availableEmployees.map(emp => emp._id));
-    }
+  const selectAll = () => {
+    setSelectedEmployees(availableEmployees.map(emp => emp._id));
   };
 
-  const deselectAll = (type) => {
-    if (type === 'interns') {
-      setSelectedInterns([]);
-    } else {
-      setSelectedEmployees([]);
-    }
+  const deselectAll = () => {
+    setSelectedEmployees([]);
   };
 
   if (!isOpen) return null;
@@ -196,166 +164,62 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], 
 
           {/* Body */}
           <div className="p-6">
-            {/* Tabs */}
-            <div className="flex border-b border-gray-200 mb-4">
-              <button
-                onClick={() => setActiveTab('interns')}
-                className={`flex-1 py-2 px-4 text-sm font-medium transition-colors border-b-2 ${
-                  activeTab === 'interns'
-                    ? 'border-green-500 text-green-700'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                  Interns
-                  <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs">
-                    {selectedInterns.length}
-                  </span>
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveTab('employees')}
-                className={`flex-1 py-2 px-4 text-sm font-medium transition-colors border-b-2 ${
-                  activeTab === 'employees'
-                    ? 'border-purple-500 text-purple-700'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  Employees
-                  <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs">
-                    {selectedEmployees.length}
-                  </span>
-                </span>
-              </button>
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-sm text-gray-500">
+                {availableEmployees.length} employees available
+              </span>
+              <div className="space-x-2">
+                <button
+                  onClick={selectAll}
+                  className="text-xs text-purple-600 hover:text-purple-800 font-medium px-2 py-1 hover:bg-purple-50 rounded transition-colors"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={deselectAll}
+                  className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 hover:bg-red-50 rounded transition-colors"
+                >
+                  Deselect All
+                </button>
+              </div>
             </div>
 
-            {/* Content */}
-            {activeTab === 'interns' ? (
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-sm text-gray-500">
-                    {availableInterns.length} interns available
-                  </span>
-                  <div className="space-x-2">
-                    <button
-                      onClick={() => selectAll('interns')}
-                      className="text-xs text-green-600 hover:text-green-800 font-medium px-2 py-1 hover:bg-green-50 rounded transition-colors"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      onClick={() => deselectAll('interns')}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 hover:bg-red-50 rounded transition-colors"
-                    >
-                      Deselect All
-                    </button>
-                  </div>
-                </div>
-
-                <div className="max-h-60 overflow-y-auto space-y-1">
-                  {availableInterns.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">
-                      No interns available
-                    </p>
-                  ) : (
-                    availableInterns.map((intern) => (
-                      <label
-                        key={intern._id}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedInterns.includes(intern._id)}
-                          onChange={() => handleInternToggle(intern._id)}
-                          className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            {getDisplayName(intern, 'intern')}
-                          </p>
-                          {intern.email && (
-                            <p className="text-xs text-gray-500 truncate">
-                              {intern.email}
-                            </p>
-                          )}
-                        </div>
-                        {intern.uniqueID && (
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                            {intern.uniqueID}
-                          </span>
-                        )}
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-sm text-gray-500">
-                    {availableEmployees.length} employees available
-                  </span>
-                  <div className="space-x-2">
-                    <button
-                      onClick={() => selectAll('employees')}
-                      className="text-xs text-purple-600 hover:text-purple-800 font-medium px-2 py-1 hover:bg-purple-50 rounded transition-colors"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      onClick={() => deselectAll('employees')}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 hover:bg-red-50 rounded transition-colors"
-                    >
-                      Deselect All
-                    </button>
-                  </div>
-                </div>
-
-                <div className="max-h-60 overflow-y-auto space-y-1">
-                  {availableEmployees.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">
-                      No employees available
-                    </p>
-                  ) : (
-                    availableEmployees.map((employee) => (
-                      <label
-                        key={employee._id}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedEmployees.includes(employee._id)}
-                          onChange={() => handleEmployeeToggle(employee._id)}
-                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            {getDisplayName(employee, 'employee')}
-                          </p>
-                          {employee.email && (
-                            <p className="text-xs text-gray-500 truncate">
-                              {employee.email}
-                            </p>
-                          )}
-                        </div>
-                        {employee.employeeID && (
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                            {employee.employeeID}
-                          </span>
-                        )}
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
+            <div className="max-h-60 overflow-y-auto space-y-1">
+              {availableEmployees.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">
+                  No employees available
+                </p>
+              ) : (
+                availableEmployees.map((employee) => (
+                  <label
+                    key={employee._id}
+                    className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedEmployees.includes(employee._id)}
+                      onChange={() => handleEmployeeToggle(employee._id)}
+                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">
+                        {getDisplayName(employee, 'employee')}
+                      </p>
+                      {employee.email && (
+                        <p className="text-xs text-gray-500 truncate">
+                          {employee.email}
+                        </p>
+                      )}
+                    </div>
+                    {employee.employeeID && (
+                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                        {employee.employeeID}
+                      </span>
+                    )}
+                  </label>
+                ))
+              )}
+            </div>
           </div>
 
           {/* Footer */}
@@ -369,11 +233,7 @@ const AssignmentModal = ({ isOpen, onClose, lead, interns = [], employees = [], 
             <button
               onClick={handleSave}
               disabled={saving}
-              className={`px-6 py-2 text-sm font-medium text-white rounded-lg transition-all shadow-md ${
-                activeTab === 'interns'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-purple-600 hover:bg-purple-700'
-              } ${
+              className={`px-6 py-2 text-sm font-medium text-white rounded-lg transition-all shadow-md bg-purple-600 hover:bg-purple-700 ${
                 saving ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -405,7 +265,6 @@ export const TeamLead = () => {
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [assignedInterns, setAssignedInterns] = useState({});
   const [assignedEmployees, setAssignedEmployees] = useState({});
 
   // Helper Functions
@@ -640,31 +499,6 @@ const getDesignation = (lead) => {
     return lead.email || lead.user?.email || "N/A";
   };
 
-  const getAssignedInternIds = (lead) => {
-    const candidateLists = [
-      lead.interns,
-      lead.assignedInterns,
-      lead.teamInterns,
-      lead.internIds,
-      lead.team?.interns,
-      lead.user?.interns,
-      lead.teamLead?.interns,
-    ];
-
-    for (const value of candidateLists) {
-      if (!value) continue;
-      if (Array.isArray(value)) {
-        const ids = value
-          .map((item) => normalizeInternId(item))
-          .filter(Boolean);
-        if (ids.length > 0) {
-          return [...new Set(ids)];
-        }
-      }
-    }
-    return [];
-  };
-
   const getAssignedEmployeeIds = (lead) => {
     const candidateLists = [
       lead.employees,
@@ -676,26 +510,13 @@ const getDesignation = (lead) => {
       lead.teamLead?.employees,
     ];
 
-    for (const value of candidateLists) {
-      if (!value) continue;
-      if (Array.isArray(value)) {
-        const ids = value
-          .map((item) => normalizeEmployeeId(item))
-          .filter(Boolean);
-        if (ids.length > 0) {
-          return [...new Set(ids)];
-        }
-      }
-    }
-    return [];
-  };
+    const mergedIds = candidateLists.flatMap((value) => {
+      if (!value) return [];
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => normalizeEmployeeId(item)).filter(Boolean);
+    });
 
-  const loadSavedAssignments = () => {
-    try {
-      return JSON.parse(localStorage.getItem('teamLeadAssignedInterns') || '{}') || {};
-    } catch {
-      return {};
-    }
+    return [...new Set(mergedIds)];
   };
 
   const loadSavedEmployeeAssignments = () => {
@@ -703,14 +524,6 @@ const getDesignation = (lead) => {
       return JSON.parse(localStorage.getItem('teamLeadAssignedEmployees') || '{}') || {};
     } catch {
       return {};
-    }
-  };
-
-  const persistAssignments = (assignments) => {
-    try {
-      localStorage.setItem('teamLeadAssignedInterns', JSON.stringify(assignments));
-    } catch {
-      // ignore storage failures
     }
   };
 
@@ -821,23 +634,12 @@ const getDesignation = (lead) => {
         fetchEmployees(headers)
       ]);
 
-      const savedInternAssignments = loadSavedAssignments();
       const savedEmployeeAssignments = loadSavedEmployeeAssignments();
 
-      const internAssignments = {};
       const employeeAssignments = {};
 
       uniqueTeamLeads.forEach((lead) => {
         const leadId = lead._id;
-        
-        const apiInterns = getAssignedInternIds(lead);
-        if (apiInterns.length > 0) {
-          internAssignments[leadId] = apiInterns;
-        } else if (savedInternAssignments[leadId]) {
-          internAssignments[leadId] = savedInternAssignments[leadId];
-        } else {
-          internAssignments[leadId] = [];
-        }
 
         const apiEmployees = getAssignedEmployeeIds(lead);
         if (apiEmployees.length > 0) {
@@ -849,9 +651,7 @@ const getDesignation = (lead) => {
         }
       });
 
-      setAssignedInterns(internAssignments);
       setAssignedEmployees(employeeAssignments);
-      persistAssignments(internAssignments);
       persistEmployeeAssignments(employeeAssignments);
 
     } catch (error) {
@@ -912,7 +712,6 @@ const getDesignation = (lead) => {
   const handleOpenModal = (lead) => {
     const leadWithAssignments = {
       ...lead,
-      assignedInterns: assignedInterns[lead._id] || [],
       assignedEmployees: assignedEmployees[lead._id] || []
     };
     setSelectedLead(leadWithAssignments);
@@ -951,14 +750,12 @@ const getDesignation = (lead) => {
         }
       }
   
-      const internIds = data.internIds.map(id => String(id));
-  
       const payload = {
         teamLead: data.leadId,
         employees: employeeIds,
-        interns: internIds
+        interns: []
       };
-  
+
       console.log('Sending payload:', payload);
   
       const response = await axios.post(
@@ -968,19 +765,11 @@ const getDesignation = (lead) => {
       );
   
       if (response.status === 200 || response.status === 201) {
-        setAssignedInterns(prev => ({
-          ...prev,
-          [data.leadId]: data.internIds
-        }));
         setAssignedEmployees(prev => ({
           ...prev,
           [data.leadId]: data.employeeIds
         }));
-        
-        persistAssignments({
-          ...assignedInterns,
-          [data.leadId]: data.internIds
-        });
+
         persistEmployeeAssignments({
           ...assignedEmployees,
           [data.leadId]: data.employeeIds
@@ -1048,29 +837,21 @@ const getDesignation = (lead) => {
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-8">
           
           {/* Stats */}
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
               <p className="text-sm text-blue-600 font-medium">Total Team Leads</p>
               <p className="text-2xl font-bold text-blue-900">{teamLeads.length}</p>
             </div>
-            <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-              <p className="text-sm text-green-600 font-medium">Total Interns</p>
-              <p className="text-2xl font-bold text-green-900">
-                {Object.values(assignedInterns).reduce((acc, curr) => acc + curr.length, 0)}
-              </p>
-            </div>
             <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
               <p className="text-sm text-purple-600 font-medium">Total Employees</p>
               <p className="text-2xl font-bold text-purple-900">
-                {Object.values(assignedEmployees).reduce((acc, curr) => acc + curr.length, 0)}
+                {employees.filter((employee) => employee.role?.toLowerCase().trim() === "employee").length}
               </p>
             </div>
             <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
               <p className="text-sm text-orange-600 font-medium">Total Members</p>
               <p className="text-2xl font-bold text-orange-900">
-                {teamLeads.length +
-                 Object.values(assignedInterns).reduce((acc, curr) => acc + curr.length, 0) +
-                 Object.values(assignedEmployees).reduce((acc, curr) => acc + curr.length, 0)}
+                {teamLeads.length + employees.filter((employee) => employee.role?.toLowerCase().trim() === "employee").length}
               </p>
             </div>
           </div>
@@ -1091,9 +872,8 @@ const getDesignation = (lead) => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {teamLeads.map((lead, index) => {
-              const selectedInterns = assignedInterns[lead._id] || [];
               const selectedEmployees = assignedEmployees[lead._id] || [];
-              const totalAssignments = selectedInterns.length + selectedEmployees.length;
+              const totalAssignments = selectedEmployees.length;
               const leadName = getUserName(lead);
               const leadEmail = getUserEmail(lead);
               const departmentName = getDepartment(lead, employees);
@@ -1141,12 +921,8 @@ const getDesignation = (lead) => {
                     </div>
 
                     {/* Stats */}
-                    <div className="grid grid-cols-3 gap-3 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                      <div className="text-center">
-                        <p className="text-xs text-gray-500 font-medium">Interns</p>
-                        <p className="text-lg font-bold text-green-600">{selectedInterns.length}</p>
-                      </div>
-                      <div className="text-center border-l border-r border-gray-200">
+                    <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="text-center border-r border-gray-200">
                         <p className="text-xs text-gray-500 font-medium">Employees</p>
                         <p className="text-lg font-bold text-purple-600">{selectedEmployees.length}</p>
                       </div>
@@ -1179,16 +955,7 @@ const getDesignation = (lead) => {
                       <div className="mt-4 pt-3 border-t border-gray-200">
                         <p className="text-xs text-gray-500 font-medium mb-2">Team Members</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {selectedInterns.slice(0, 3).map((internId) => {
-                            const intern = interns.find(i => String(i._id) === String(internId));
-                            return intern ? (
-                              <span key={internId} className="inline-flex items-center px-2.5 py-1 bg-green-100 text-green-800 text-xs rounded-full border border-green-200">
-                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
-                                {getInternDisplayName(intern)}
-                              </span>
-                            ) : null;
-                          })}
-                          {selectedEmployees.slice(0, 3).map((employeeId) => {
+                          {selectedEmployees.slice(0, 6).map((employeeId) => {
                             const employee = employees.find(e => 
                               String(e._id) === String(employeeId) || 
                               (e.userID && String(e.userID) === String(employeeId))

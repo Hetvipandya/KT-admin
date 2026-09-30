@@ -234,7 +234,13 @@
             dob: user.dob || user.dateOfBirth || user.birthDate || user.birthday || null,
           }))
           .filter((user) => user.dob && isBirthdayInCurrentMonth(user.dob))
-          .sort((a, b) => new Date(a.dob) - new Date(b.dob));
+          .sort((a, b) => {
+            const aDate = parseBirthdayDate(a.dob);
+            const bDate = parseBirthdayDate(b.dob);
+
+            if (!aDate || !bDate) return 0;
+            return aDate.getMonth() - bDate.getMonth() || aDate.getDate() - bDate.getDate();
+          });
 
         setBirthdays(formattedBirthdays);
         setDashboardCounts((prev) => ({
@@ -850,10 +856,32 @@ async function fetchHolidays() {
       return parsedDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
     };
 
+    const parseBirthdayDate = (dateValue) => {
+      if (!dateValue) return null;
+
+      if (dateValue instanceof Date && !Number.isNaN(dateValue.getTime())) {
+        return dateValue;
+      }
+
+      const value = String(dateValue).trim();
+      if (!value) return null;
+
+      const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        const [, year, month, day] = isoMatch;
+        const parsedDate = new Date(Number(year), Number(month) - 1, Number(day));
+        if (!Number.isNaN(parsedDate.getTime())) return parsedDate;
+      }
+
+      const parsedDate = new Date(value);
+      if (!Number.isNaN(parsedDate.getTime())) return parsedDate;
+
+      return null;
+    };
+
     const formatBirthdayDate = (dateValue) => {
-      if (!dateValue) return "";
-      const parsedDate = new Date(dateValue);
-      if (Number.isNaN(parsedDate.getTime())) return dateValue;
+      const parsedDate = parseBirthdayDate(dateValue);
+      if (!parsedDate) return dateValue || "";
       const dayMonth = parsedDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
       const year = parsedDate.getFullYear();
       if (year && year > 1900 && year < new Date().getFullYear()) {
@@ -877,9 +905,8 @@ async function fetchHolidays() {
     };
 
     const isBirthdayInCurrentMonth = (dateValue) => {
-      if (!dateValue) return false;
-      const parsedDate = new Date(dateValue);
-      if (Number.isNaN(parsedDate.getTime())) return false;
+      const parsedDate = parseBirthdayDate(dateValue);
+      if (!parsedDate) return false;
       return parsedDate.getMonth() === new Date().getMonth();
     };
 

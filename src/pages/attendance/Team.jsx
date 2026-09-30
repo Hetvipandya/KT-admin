@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { 
   Plus, 
@@ -59,16 +60,59 @@ function MultiSelectDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const [menuPosition, setMenuPosition] = useState(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        !dropdownRef.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return undefined;
+
+    const updateMenuPosition = () => {
+      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      if (!triggerRect) return;
+
+      const spaceAbove = triggerRect.top - 8;
+      const spaceBelow = window.innerHeight - triggerRect.bottom - 8;
+      const openAbove = spaceBelow < 264 && spaceAbove > spaceBelow;
+      const availableSpace = Math.max(
+        120,
+        Math.min(256, openAbove ? spaceAbove : spaceBelow)
+      );
+      const width = Math.min(triggerRect.width, window.innerWidth - 16);
+
+      setMenuPosition({
+        position: "fixed",
+        left: Math.max(8, Math.min(triggerRect.left, window.innerWidth - width - 8)),
+        width,
+        maxHeight: availableSpace,
+        ...(openAbove
+          ? { bottom: window.innerHeight - triggerRect.top + 4 }
+          : { top: triggerRect.bottom + 4 }),
+      });
+    };
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [isOpen]);
 
   const filteredOptions = options.filter(
     (opt) =>
@@ -121,7 +165,18 @@ function MultiSelectDropdown({
 
       {/* Trigger Box - Fixed uniform height h-[42px] matching Team Lead */}
       <div
+        ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsOpen((open) => !open);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         className={`h-[42px] w-full border rounded-lg px-3 py-2 bg-white flex items-center justify-between gap-1.5 cursor-pointer shadow-sm transition-all text-sm select-none ${
           isOpen
             ? "border-blue-500 ring-2 ring-blue-100"
@@ -171,8 +226,12 @@ function MultiSelectDropdown({
       </div>
 
       {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 flex flex-col overflow-hidden">
+      {isOpen && menuPosition && createPortal(
+        <div
+          ref={menuRef}
+          style={menuPosition}
+          className="z-[10000] bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 flex flex-col overflow-hidden"
+        >
           {/* Search + Quick Actions */}
           <div className="p-2 border-b border-gray-100 bg-gray-50/80">
             <div className="relative">
@@ -246,7 +305,8 @@ function MultiSelectDropdown({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -316,6 +376,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     projectId: "",
     taskTitle: "",
     description: "",
+    assignedTeamLead: "",
     assignedTo: "",
     assignedEmployee: "",
     assignedBy: "",
@@ -853,7 +914,12 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   };
 
   const getTaskAssignedMember = (task) => {
-    const assignedId = task?.assignedTo || task?.assignedEmployee || task?.assignedIntern;
+    const assignedId =
+      task?.assignedTo ||
+      task?.assignedEmployee ||
+      task?.assignedIntern ||
+      task?.assignedTeamLeadUser ||
+      task?.assignedTeamLeadEmployee;
     if (!assignedId) return null;
 
     const projectId = task?.projectId?._id || task?.projectId || task?.project?._id || task?.project;
@@ -893,6 +959,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     setProjectForm((prev) => ({
       ...prev,
       [name]: value,
+      ...(name === "assignedTL" ? { assignedEmployees: [] } : {}),
     }));
   };
 
@@ -911,7 +978,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   const handleTaskChange = (e) => {
     const { name, value } = e.target;
     
-    if (name === "assignedTo") {
+    if (name === "assignedEmployee") {
       setTaskForm({
         ...taskForm,
         assignedTo: value,
@@ -927,26 +994,20 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   const openAddTask = (projectId = null) => {
     const projId = projectId || selectedProject?._id || "";
     const proj = projects.find(p => isSameId(p._id || p.id, projId));
-    if (proj) {
-      setSelectedProject(proj);
-      updateProjectTeamMembers(proj);
-    }
-    
-    let assignedTo = "";
-    if (projectTeamMembers.employees[0]) {
-      assignedTo = normalizeId(projectTeamMembers.employees[0]);
-    } else if (projectTeamMembers.tl) {
-      assignedTo = projectTeamMembers.tl._id || projectTeamMembers.tl.id || "";
-    } else if (projectTeamMembers.interns[0]) {
-      assignedTo = normalizeId(projectTeamMembers.interns[0]);
-    }
+    const assignedTeamLead = normalizeId(
+      proj?.teamLeadUser || proj?.teamLeadEmployee
+    );
+
+    setSelectedProject(proj || null);
+    updateProjectTeamMembers(proj);
     
     setTaskForm({
       projectId: projId,
       taskTitle: "",
       description: "",
-      assignedTo: assignedTo,
-      assignedEmployee: assignedTo,
+      assignedTeamLead,
+      assignedTo: "",
+      assignedEmployee: "",
       assignedBy: "",
       startDate: "",
       dueDate: "",
@@ -976,7 +1037,23 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     e.preventDefault();
 
     try {
-      const assignedEmployeeId = taskForm.assignedTo || taskForm.assignedEmployee;
+      const assignedEmployeeId = taskForm.assignedEmployee || taskForm.assignedTo;
+      const taskProject = findEntity(
+        projects,
+        taskForm.projectId || selectedProject?._id || selectedProject?.id
+      );
+      const projectTeamLeadUserId = normalizeId(taskProject?.teamLeadUser);
+      const projectTeamLeadEmployeeId = normalizeId(taskProject?.teamLeadEmployee);
+      const assignedTeamLeadUserId =
+        taskForm.assignedTeamLead &&
+        isSameId(taskForm.assignedTeamLead, projectTeamLeadUserId)
+          ? projectTeamLeadUserId
+          : null;
+      const assignedTeamLeadEmployeeId =
+        taskForm.assignedTeamLead &&
+        isSameId(taskForm.assignedTeamLead, projectTeamLeadEmployeeId)
+          ? projectTeamLeadEmployeeId
+          : null;
       
       const assignedEmployee = users.find(user => 
         isSameId(user._id, assignedEmployeeId)
@@ -987,8 +1064,10 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
         taskTitle: (taskForm.taskTitle || "").trim(),
         taskDescription: taskForm.description || "",
         description: taskForm.description || "",
-        assignedEmployee: assignedEmployeeId,
-        assignedTo: assignedEmployeeId,
+        assignedTeamLeadUser: assignedTeamLeadUserId,
+        assignedTeamLeadEmployee: assignedTeamLeadEmployeeId,
+        assignedEmployee: assignedEmployeeId || null,
+        assignedTo: assignedEmployeeId || null,
         assignedBy: taskForm.assignedBy || assignedEmployeeId || null,
         startDate: taskForm.startDate || null,
         dueDate: taskForm.dueDate || null,
@@ -1003,9 +1082,17 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
         return;
       }
 
-      if (!payload.assignedEmployee) {
-        alert("Please select an employee to assign this task.");
+      if (!assignedTeamLeadUserId && !assignedTeamLeadEmployeeId && !payload.assignedEmployee) {
+        alert("Please assign this task to a team lead or an employee.");
         return;
+      }
+
+      if (payload.assignedEmployee) {
+        const allowedAssigneeIds = getAvailableTaskAssignees(taskProject).map(normalizeId);
+        if (!allowedAssigneeIds.includes(normalizeId(payload.assignedEmployee))) {
+          alert("Please assign this task to an employee assigned to the selected project.");
+          return;
+        }
       }
 
       try {
@@ -1022,6 +1109,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
         projectId: "",
         taskTitle: "",
         description: "",
+        assignedTeamLead: "",
         assignedTo: "",
         assignedEmployee: "",
         assignedBy: "",
@@ -1187,31 +1275,25 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     }
   };
 
-  const getAvailableTaskAssignees = () => {
-    const assignees = [];
-    
-    if (projectTeamMembers.tl) {
-      assignees.push({
-        ...projectTeamMembers.tl,
-        role: 'Team Lead'
+  const getAvailableTaskAssignees = (project = selectedProject) => {
+    const projectEmployees = Array.isArray(project?.employees) ? project.employees : [];
+
+    return projectEmployees
+      .map((employee) => {
+        const member =
+          findEntity(employees, employee) ||
+          findEntity(users, employee) ||
+          (typeof employee === "object" ? employee : null);
+        return member ? { ...member, role: "Employee" } : null;
+      })
+      .filter((employee, index, allEmployees) => {
+        if (!employee) return false;
+        const employeeId = normalizeId(employee);
+        return (
+          employeeId &&
+          allEmployees.findIndex((candidate) => normalizeId(candidate) === employeeId) === index
+        );
       });
-    }
-    
-    projectTeamMembers.employees.forEach((employee) => {
-      assignees.push({
-        ...employee,
-        role: 'Employee'
-      });
-    });
-    
-    projectTeamMembers.interns.forEach((intern) => {
-      assignees.push({
-        ...intern,
-        role: 'Intern'
-      });
-    });
-    
-    return assignees;
   };
 
   const getHrAndAdminUsers = () => {
@@ -2174,57 +2256,22 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                     }
                   });
                   const allEmps = Array.from(empMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-                  // 3. Interns
-                  const internMap = new Map();
-                  const seenInternEmails = new Set();
-                  const seenInternNames = new Set();
-
-                  employees.forEach((emp) => {
-                    const role = String(emp.role || emp.designation || "").trim().toLowerCase();
-                    if (role.includes("intern")) {
-                      const id = normalizeId(emp);
-                      if (!id) return;
-                      const name = getEmployeeName(emp) || "Intern";
-                      const email = String(emp.email || emp.user?.email || "").toLowerCase().trim();
-                      const designation = emp.designation || emp.jobTitle || emp.role || "";
-                      if (email) seenInternEmails.add(email);
-                      seenInternNames.add(name.toLowerCase().trim());
-                      if (!internMap.has(id)) {
-                        internMap.set(id, {
-                          id,
-                          name,
-                          subText: designation || email || "Intern",
-                        });
-                      }
-                    }
-                  });
-
-                  users.forEach((user) => {
-                    const role = String(user.role || user.userRole || "").trim().toLowerCase();
-                    if (role.includes("intern")) {
-                      const id = normalizeId(user);
-                      if (!id) return;
-                      const name = getUserName(user) || "Intern";
-                      const email = String(user.email || "").toLowerCase().trim();
-                      if ((email && seenInternEmails.has(email)) || seenInternNames.has(name.toLowerCase().trim())) {
-                        return;
-                      }
-                      if (email) seenInternEmails.add(email);
-                      seenInternNames.add(name.toLowerCase().trim());
-                      if (!internMap.has(id)) {
-                        internMap.set(id, {
-                          id,
-                          name,
-                          subText: user.email || "Intern",
-                        });
-                      }
-                    }
-                  });
-                  const allInterns = Array.from(internMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+                  const selectedTeamLead = teamLeadOptions.find((lead) =>
+                    isSameId(lead.value, projectForm.assignedTL)
+                  );
+                  const assignedLeadEmployees = selectedTeamLead?.employees || [];
+                  const teamLeadEmployees = allEmps.filter((employee) =>
+                    assignedLeadEmployees.some((assignedEmployee) => {
+                      const matchedEmployee =
+                        findEntity(employees, assignedEmployee) ||
+                        findEntity(users, assignedEmployee) ||
+                        assignedEmployee;
+                      return isSameId(employee.id, matchedEmployee);
+                    })
+                  );
 
                   return (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Team Lead */}
                       <div>
                         <div className="flex items-center justify-between mb-1 min-h-[22px]">
@@ -2254,8 +2301,8 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                         <MultiSelectDropdown
                           label="Employees"
                           icon={User}
-                          placeholder="Select Employees..."
-                          options={allEmps}
+                          placeholder={projectForm.assignedTL ? "Select Employees..." : "Select Team Lead first..."}
+                          options={teamLeadEmployees}
                           selectedValues={projectForm.assignedEmployees || []}
                           onChange={(newValues) =>
                             setProjectForm((prev) => ({
@@ -2266,22 +2313,6 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                         />
                       </div>
 
-                      {/* Multiple Interns */}
-                      <div>
-                        <MultiSelectDropdown
-                          label="Interns"
-                          icon={User}
-                          placeholder="Select Interns..."
-                          options={allInterns}
-                          selectedValues={projectForm.assignedInterns || []}
-                          onChange={(newValues) =>
-                            setProjectForm((prev) => ({
-                              ...prev,
-                              assignedInterns: newValues,
-                            }))
-                          }
-                        />
-                      </div>
                     </div>
                   );
                 })()}
@@ -2357,17 +2388,15 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                         (p) => isSameId(p._id || p.id, projectId)
                       );
                       setSelectedProject(project || null);
-                      
-                      if (project) {
-                        updateProjectTeamMembers(project);
-                      }
-                      
+                      updateProjectTeamMembers(project);
                       setTaskForm((prev) => ({
                         ...prev,
                         projectId: project?._id || projectId || "",
-                        assignedTo: project && project.employees?.[0]
-                          ? normalizeId(project.employees[0])
-                          : prev.assignedTo
+                        assignedTeamLead: normalizeId(
+                          project?.teamLeadUser || project?.teamLeadEmployee
+                        ),
+                        assignedTo: "",
+                        assignedEmployee: "",
                       }));
                     }}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -2407,23 +2436,40 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Assign To *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Assign Team Lead</label>
                   <select
-                    name="assignedTo"
-                    value={taskForm.assignedTo}
+                    name="assignedTeamLead"
+                    value={taskForm.assignedTeamLead}
                     onChange={handleTaskChange}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
                   >
-                    <option value="">Select Team Member</option>
-                    {getAvailableTaskAssignees().map((member) => (
-                      <option key={member._id || member.id} value={member._id || member.id}>
-                        {getUserName(member)} ({member.role})
+                    <option value="">No Team Lead</option>
+                    {selectedProject && (selectedProject.teamLeadUser || selectedProject.teamLeadEmployee) && (
+                      <option value={normalizeId(selectedProject.teamLeadUser || selectedProject.teamLeadEmployee)}>
+                        {getTeamLeadNameById(selectedProject.teamLeadUser || selectedProject.teamLeadEmployee)}
                       </option>
-                    ))}
-                    {getAvailableTaskAssignees().length === 0 && users.map((user) => (
-                      <option key={user._id} value={user._id}>
-                        {getUserName(user)}
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Assign Employee</label>
+                  <select
+                    name="assignedEmployee"
+                    value={taskForm.assignedEmployee}
+                    onChange={handleTaskChange}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">
+                      {!taskForm.projectId
+                        ? "Select a project first"
+                        : getAvailableTaskAssignees().length === 0
+                          ? "No employees assigned to this project"
+                          : "Select Employee"}
+                    </option>
+                    {getAvailableTaskAssignees().map((member) => (
+                      <option key={normalizeId(member)} value={normalizeId(member)}>
+                        {getUserName(member)}
                       </option>
                     ))}
                   </select>
