@@ -11,7 +11,7 @@ import {
   MessageSquare,
   X,
   Check,
-  CheckCircle,
+  CheckCircle, 
   XCircle,
   RefreshCw,
   User,
@@ -1291,6 +1291,7 @@ export default function LeaveRequest() {
 
     const isActioning = actioningId === leave.id;
     const loggedRole = normalizeRole(currentRole);
+    const ApproveIcon = Check;
     let relevantStatus = leave?.adminStatus;
     if (loggedRole === "teamlead") relevantStatus = leave?.teamLeadStatus;
     else if (loggedRole === "hr") relevantStatus = leave?.hrStatus;
@@ -1300,10 +1301,20 @@ export default function LeaveRequest() {
     if (currentStatus === "Approved") {
       return (
         <div className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-            Approved
-          </span>
+          {loggedRole === "admin" ? (
+            <span
+              aria-label="Approved"
+              title="Approved"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700"
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" />
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+              Approved
+            </span>
+          )}
 
           <button
             type="button"
@@ -1336,10 +1347,11 @@ export default function LeaveRequest() {
               openActionModal(leave, "approved");
             }}
             disabled={isActioning}
+            aria-label="Approve Leave"
             title="Approve Leave"
-            className="w-7 h-7 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center transition active:scale-90 disabled:opacity-50"
+            className="w-7 h-7 shrink-0 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center transition active:scale-90 disabled:opacity-50"
           >
-            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+            <ApproveIcon className="w-3.5 h-3.5 stroke-[2.5]" />
           </button>
         </div>
       );
@@ -1354,10 +1366,11 @@ export default function LeaveRequest() {
             openActionModal(leave, "approved");
           }}
           disabled={isActioning}
+          aria-label="Approve Leave"
           title="Approve Leave"
-          className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center shadow-sm transition active:scale-90 disabled:opacity-50"
+          className="w-8 h-8 shrink-0 rounded-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center shadow-sm transition active:scale-90 disabled:opacity-50"
         >
-          <Check className="w-4 h-4 stroke-[2.5]" />
+          <ApproveIcon className="w-4 h-4 stroke-[2.5]" />
         </button>
 
         <button
@@ -1368,7 +1381,7 @@ export default function LeaveRequest() {
           }}
           disabled={isActioning}
           title="Reject Leave"
-          className="w-8 h-8 rounded-full bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white flex items-center justify-center shadow-sm transition active:scale-90 disabled:opacity-50"
+          className="w-8 h-8 shrink-0 rounded-full bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white flex items-center justify-center shadow-sm transition active:scale-90 disabled:opacity-50"
         >
           <X className="w-4 h-4 stroke-[2.5]" />
         </button>
@@ -1603,50 +1616,62 @@ export default function LeaveRequest() {
                   DESKTOP TABLE
               ================================================== */}
 
-              <div className="hidden lg:block overflow-x-auto">
+              <div className="hidden xl:block overflow-hidden">
 
-                <table className="w-full text-sm">
+                <table className="w-full table-fixed text-xs">
+                  <colgroup>
+                    <col className="w-[4%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[11%]" />
+                  </colgroup>
 
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         #
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Employee
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Leave
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Duration
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Dates
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Team Lead
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         HR
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Admin
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Workflow
                       </th>
 
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">
+                      <th className="px-2 py-3 text-left text-xs font-bold text-gray-500">
                         Approve / Reject Reason
                       </th>
                     </tr>
@@ -1667,13 +1692,13 @@ export default function LeaveRequest() {
                           className="hover:bg-blue-50 cursor-pointer transition"
                         >
 
-                          <td className="px-4 py-4 text-gray-500">
+                          <td className="px-2 py-3 text-gray-500">
                             {index + 1}
                           </td>
 
-                          <td className="px-4 py-4">
+                          <td className="px-2 py-3">
 
-                            <div className="flex items-center gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
 
                               <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
                                 {getInitials(
@@ -1681,8 +1706,8 @@ export default function LeaveRequest() {
                                 )}
                               </div>
 
-                              <div>
-                                <p className="font-semibold text-gray-800">
+                              <div className="min-w-0">
+                                <p className="break-words font-semibold text-gray-800">
                                   {request.name}
                                 </p>
 
@@ -1696,7 +1721,7 @@ export default function LeaveRequest() {
                             </div>
                           </td>
 
-                          <td className="px-4 py-4">
+                          <td className="px-2 py-3">
 
                             <span
                               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${getLeaveTypeStyle(
@@ -1711,21 +1736,16 @@ export default function LeaveRequest() {
                             </span>
                           </td>
 
-                          <td className="px-4 py-4 font-semibold text-gray-800">
+                          <td className="px-2 py-3 font-semibold text-gray-800">
                             {formatDuration(request)}
                           </td>
 
-                          <td className="px-4 py-4 whitespace-nowrap text-xs text-gray-600">
-                            {formatDate(
-                              request.startDate
-                            )}{" "}
-                            -{" "}
-                            {formatDate(
-                              request.endDate
-                            )}
+                          <td className="px-2 py-3 text-xs text-gray-600">
+                            <span className="block">{formatDate(request.startDate)}</span>
+                            <span className="block">to {formatDate(request.endDate)}</span>
                           </td>
 
-                          <td className="px-4 py-4">
+                          <td className="px-2 py-3">
                             {normalizeRole(currentRole) === "teamlead" && canTakeAction(request) ? (
                               <ApprovalActions leave={request} />
                             ) : (
@@ -1737,7 +1757,7 @@ export default function LeaveRequest() {
                             )}
                           </td>
 
-                          <td className="px-4 py-4">
+                          <td className="px-2 py-3">
                             {normalizeRole(currentRole) === "hr" && canTakeAction(request) ? (
                               <ApprovalActions leave={request} />
                             ) : (
@@ -1749,7 +1769,7 @@ export default function LeaveRequest() {
                             )}
                           </td>
 
-                          <td className="px-4 py-4">
+                          <td className="px-2 py-3">
                             {normalizeRole(request.role) === "hr" ? (
                               normalizeRole(currentRole) === "admin" && canTakeAction(request) ? (
                                 <ApprovalActions leave={request} />
@@ -1763,15 +1783,15 @@ export default function LeaveRequest() {
                             )}
                           </td>
 
-                          <td className="px-4 py-4">
-                            <span className="text-xs font-medium text-gray-600 whitespace-nowrap">
+                          <td className="px-2 py-3">
+                            <span className="text-xs font-medium text-gray-600">
                               {getWorkflowText(
                                 request
                               )}
                             </span>
                           </td>
 
-                          <td className="px-4 py-4 min-w-[200px]">
+                          <td className="px-2 py-3">
                             {request.teamLeadRemark || request.hrRemark || request.adminRemark || request.remark || request.description ? (
                               <div className="space-y-1.5 text-xs">
                                 {request.teamLeadRemark && (
@@ -1821,7 +1841,7 @@ export default function LeaveRequest() {
                   MOBILE CARDS
               ================================================== */}
 
-              <div className="lg:hidden p-3 space-y-3">
+              <div className="xl:hidden p-3 space-y-3">
 
                 {filteredRequests.map(
                   (request) => (

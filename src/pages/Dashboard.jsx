@@ -322,36 +322,47 @@ async function fetchHolidays() {
       holidays = data.result;
     }
 
-    const formatted = holidays.map((holiday) => ({
-      id: holiday._id || holiday.id,
+    const formatted = holidays
+      .filter((holiday) => {
+        const targetDate = holiday.holidayDate || holiday.date;
+        return isHolidayUpcomingInCurrentMonth(targetDate);
+      })
+      .map((holiday) => ({
+        id: holiday._id || holiday.id,
 
-      name:
-        holiday.holidayName ||
-        holiday.name ||
-        "Holiday",
+        name:
+          holiday.holidayName ||
+          holiday.name ||
+          "Holiday",
 
-      date: formatHolidayDate(
-        holiday.holidayDate ||
-        holiday.date
-      ),
+        date: formatHolidayDate(
+          holiday.holidayDate ||
+          holiday.date
+        ),
 
-      // ================= UNSPLASH IMAGE =================
-      image:
-        holiday.imagePhotographer || null,
+        // ================= UNSPLASH IMAGE =================
+        image:
+          holiday.imagePhotographer || null,
 
-      // Optional Unsplash attribution
-      photographer:
-        holiday.imagePhotographer || null,
+        // Optional Unsplash attribution
+        photographer:
+          holiday.imagePhotographer || null,
 
-      photographerUrl:
-        holiday.imagePhotographerUrl || null,
+        photographerUrl:
+          holiday.imagePhotographerUrl || null,
 
-      unsplashUrl:
-        holiday.imageUnsplashUrl || null,
+        unsplashUrl:
+          holiday.imageUnsplashUrl || null,
 
-      isDefault:
-        holiday.isDefault || false,
-    }));
+        isDefault:
+          holiday.isDefault || false,
+      }))
+      .sort((a, b) => {
+        const aDate = parseBirthdayDate(a.date);
+        const bDate = parseBirthdayDate(b.date);
+        if (!aDate || !bDate) return 0;
+        return aDate.getDate() - bDate.getDate();
+      });
 
     setUpcomingHolidays(formatted);
   } catch (error) {
@@ -861,7 +872,7 @@ async function fetchHolidays() {
 
       if (dateValue instanceof Date && !Number.isNaN(dateValue.getTime())) {
         return dateValue;
-      }
+      } 
 
       const value = String(dateValue).trim();
       if (!value) return null;
@@ -907,7 +918,35 @@ async function fetchHolidays() {
     const isBirthdayInCurrentMonth = (dateValue) => {
       const parsedDate = parseBirthdayDate(dateValue);
       if (!parsedDate) return false;
-      return parsedDate.getMonth() === new Date().getMonth();
+
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      if (parsedDate.getMonth() !== currentMonth) return false;
+
+      const birthdayThisYear = new Date(currentYear, parsedDate.getMonth(), parsedDate.getDate());
+      const today = new Date(currentYear, currentMonth, now.getDate());
+
+      return birthdayThisYear.getTime() >= today.getTime();
+    };
+
+    const isHolidayUpcomingInCurrentMonth = (dateValue) => {
+      const parsedDate = parseBirthdayDate(dateValue);
+      if (!parsedDate) return false;
+
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      if (parsedDate.getMonth() !== currentMonth || parsedDate.getFullYear() !== currentYear) {
+        return false;
+      }
+
+      const holidayDate = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+      const today = new Date(currentYear, currentMonth, now.getDate());
+
+      return holidayDate.getTime() >= today.getTime();
     };
 
     const getAccentStyles = (accent) => {

@@ -959,7 +959,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     setProjectForm((prev) => ({
       ...prev,
       [name]: value,
-      ...(name === "assignedTL" ? { assignedEmployees: [] } : {}),
+      ...(name === "assignedTL" ? { assignedEmployees: [], assignedInterns: [] } : {}),
     }));
   };
 
@@ -2006,23 +2006,36 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
 
       {/* Project Modal - SAME FORM for Create + Edit */}
       {showProjectModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl max-h-[95vh] overflow-hidden mx-2 sm:mx-0">
-            <div className="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+        <div
+          className="team-drawer-backdrop fixed inset-0 z-[10000] bg-slate-950/40 backdrop-blur-[2px]"
+          onClick={closeProjectModal}
+        >
+          <div
+            className="team-drawer-panel ml-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex shrink-0 justify-between items-center px-5 sm:px-7 py-4 border-b border-slate-200 bg-white">
+              <div>
               <h2 className="text-xl font-semibold flex items-center gap-2">
-                <FolderOpen className="w-5 h-5" />
+                <FolderOpen className="w-5 h-5 text-blue-600" />
+                <span className="text-slate-900">
                 {selectedProject ? "Edit Project" : "Create New Project"}
+                </span>
               </h2>
+              <p className="mt-1 text-sm text-slate-500">Set up the project, timeline, and assigned team.</p>
+              </div>
               <button
                 type="button"
                 onClick={closeProjectModal}
-                className="text-white/80 hover:text-white hover:bg-white/10 rounded-lg p-1 transition-colors"
+                aria-label="Close project form"
+                className="text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg p-2 transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddProject} className="p-4 sm:p-6 overflow-y-auto max-h-[85vh]">
+            <form onSubmit={handleAddProject} className="flex min-h-0 flex-1 flex-col">
+              <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
               {/* Project Name + Client Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -2269,6 +2282,23 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                       return isSameId(employee.id, matchedEmployee);
                     })
                   );
+                  const teamLeadInterns = (selectedTeamLead?.interns || [])
+                    .map((intern) => {
+                      const member =
+                        findEntity(users, intern) ||
+                        findEntity(employees, intern) ||
+                        intern;
+                      return {
+                        id: normalizeId(member),
+                        name: getUserName(member),
+                        subText: member?.email || "Intern",
+                      };
+                    })
+                    .filter((intern, index, allInterns) =>
+                      intern.id &&
+                      intern.name &&
+                      allInterns.findIndex((candidate) => candidate.id === intern.id) === index
+                    );
 
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2313,13 +2343,31 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                         />
                       </div>
 
+                      <div>
+                        <MultiSelectDropdown
+                          label="Interns"
+                          icon={User}
+                          placeholder={projectForm.assignedTL ? "Select Interns..." : "Select Team Lead first..."}
+                          options={teamLeadInterns}
+                          selectedValues={projectForm.assignedInterns || []}
+                          onChange={(newValues) =>
+                            setProjectForm((prev) => ({
+                              ...prev,
+                              assignedInterns: newValues,
+                            }))
+                          }
+                        />
+                      </div>
+
                     </div>
                   );
                 })()}
               </div>
 
+              </div>
+
               {/* Buttons */}
-              <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
+              <div className="flex shrink-0 flex-col-reverse sm:flex-row gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-7">
                 <button
                   type="button"
                   onClick={closeProjectModal}
@@ -2344,45 +2392,61 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
 
       {/* Task Modal */}
       {showTaskModal && (
-        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 relative max-h-[80vh] overflow-y-auto mx-2 sm:mx-0">
-            <button
-              onClick={() => setShowTaskModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
+        <div
+          className="team-drawer-backdrop fixed inset-0 z-[10000] bg-slate-950/40 backdrop-blur-[2px]"
+          onClick={() => setShowTaskModal(false)}
+        >
+          <div
+            className="team-drawer-panel ml-auto flex h-full w-full max-w-xl flex-col bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <form onSubmit={addTask} className="flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
+                <div>
+                  <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                    <ListTodo className="w-5 h-5 text-emerald-600" />
+                    Create Task
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">Choose a project, assign ownership, and set the deadline.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTaskModal(false)}
+                  aria-label="Close task form"
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-            <form onSubmit={addTask}>
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <ListTodo className="w-6 h-6 text-green-500" />
-                Create Task
-              </h2>
-
-              <div className="space-y-4">
+              <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
                 {selectedProject && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-sm font-medium text-blue-700">Team Members</p>
-                    <div className="text-sm text-gray-600 mt-1 space-y-0.5">
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-3.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">Project team</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-700">
                       {projectTeamMembers.tl && (
-                        <p>👤 Team Lead: {getUserName(projectTeamMembers.tl)}</p>
+                        <span className="rounded-md border border-blue-200 bg-white px-2.5 py-1">Lead: {getUserName(projectTeamMembers.tl)}</span>
                       )}
                       {projectTeamMembers.employees.map((employee) => (
-                        <p key={normalizeId(employee)}>👤 Employee: {getUserName(employee)}</p>
+                        <span key={normalizeId(employee)} className="rounded-md border border-blue-200 bg-white px-2.5 py-1">Employee: {getUserName(employee)}</span>
                       ))}
                       {projectTeamMembers.interns.map((intern) => (
-                        <p key={normalizeId(intern)}>👤 Intern: {getUserName(intern)}</p>
+                        <span key={normalizeId(intern)} className="rounded-md border border-blue-200 bg-white px-2.5 py-1">Intern: {getUserName(intern)}</span>
                       ))}
                     </div>
                   </div>
                 )}
 
+                <section className="space-y-4">
+                  <div className="border-b border-slate-100 pb-2">
+                    <h3 className="text-sm font-semibold text-slate-900">Task details</h3>
+                  </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
                   <select
                     name="projectId"
                     value={taskForm.projectId || ""}
-                    onChange={(e) => {
+                    onChange={(e) => { 
                       const projectId = e.target.value;
                       const project = projects.find(
                         (p) => isSameId(p._id || p.id, projectId)
@@ -2434,7 +2498,13 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+                </section>
 
+                <section className="space-y-4">
+                  <div className="border-b border-slate-100 pb-2">
+                    <h3 className="text-sm font-semibold text-slate-900">Assignment</h3>
+                    <p className="mt-0.5 text-xs text-slate-500">Employees are limited to the selected project team.</p>
+                  </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Assign Team Lead</label>
                   <select
@@ -2494,7 +2564,12 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                     )}
                   </select>
                 </div>
+                </section>
 
+                <section className="space-y-4">
+                  <div className="border-b border-slate-100 pb-2">
+                    <h3 className="text-sm font-semibold text-slate-900">Schedule and progress</h3>
+                  </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
@@ -2560,14 +2635,17 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
+                </section>
               </div>
 
-              <button
-                type="submit"
-                className="w-full mt-6 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                Create Task
-              </button>
+              <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 sm:px-7">
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-emerald-600 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                >
+                  Create Task
+                </button>
+              </div>
             </form>
           </div>
         </div>
