@@ -725,6 +725,26 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   };
 
   const isSameId = (a, b) => normalizeId(a) === normalizeId(b);
+  const getTeamLeadMemberIds = (teamLeadId, memberType) => {
+    const teamLead = teamLeadOptions.find((lead) =>
+      isSameId(lead.value || lead._id, teamLeadId)
+    );
+    const collection = memberType === "employees" ? employees : users;
+
+    return [
+      ...new Set(
+        (teamLead?.[memberType] || [])
+          .map((member) => {
+            const match =
+              findEntity(collection, member) ||
+              findEntity(memberType === "employees" ? users : employees, member);
+            return normalizeId(match || member);
+          })
+          .filter(Boolean)
+      ),
+    ];
+  };
+
   const sortByNewest = (items = []) => {
     return [...items].sort((a, b) => {
       const aTime = new Date(
@@ -973,7 +993,12 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     setProjectForm((prev) => ({
       ...prev,
       [name]: value,
-      ...(name === "assignedTL" ? { assignedEmployees: [], assignedInterns: [] } : {}),
+      ...(name === "assignedTL"
+        ? {
+            assignedEmployees: getTeamLeadMemberIds(value, "employees"),
+            assignedInterns: getTeamLeadMemberIds(value, "interns"),
+          }
+        : {}),
     }));
   };
 
@@ -1227,6 +1252,10 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     e.preventDefault();
 
     try {
+      const selectedTeamLeadName =
+        teamLeadOptions.find((lead) =>
+          isSameId(lead.value || lead._id, projectForm.assignedTL)
+        )?.name || getTeamLeadNameById(projectForm.assignedTL);
       const payload = {
         projectName: projectForm.projectName.trim(),
         projectDescription: projectForm.projectDescription?.trim() || "",
@@ -1257,21 +1286,47 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
         return;
       }
 
+      let saveResponse;
       if (selectedProject?._id) {
         const id = selectedProject._id;
 
         // IMPORTANT: Edit uses one single PUT request with the complete
         // project payload, exactly like the New Project form.
         // Backend route expected: PUT /api/projectManage/project/:id
-        await axios.put(`${BASE_URL}/${id}`, payload);
+        saveResponse = await axios.put(`${BASE_URL}/${id}`, payload);
 
         alert("Project updated successfully.");
       } else {
-        await axios.post(`${BASE_URL}/create`, payload);
+        saveResponse = await axios.post(`${BASE_URL}/create`, payload);
         alert("Project created successfully.");
       }
 
+      const savedProject =
+        saveResponse?.data?.data?.project ||
+        saveResponse?.data?.project ||
+        saveResponse?.data?.data ||
+        saveResponse?.data;
+      const savedProjectId =
+        savedProject?._id ||
+        savedProject?.id ||
+        saveResponse?.data?.projectId ||
+        selectedProject?._id;
+
       await fetchProjects();
+      if (savedProjectId) {
+        setProjects((currentProjects) =>
+          currentProjects.map((project) =>
+            isSameId(project._id || project.id, savedProjectId)
+              ? {
+                  ...project,
+                  teamLeadUser: payload.teamLeadUser,
+                  teamLead: payload.teamLeadUser,
+                  teamLeadName: selectedTeamLeadName,
+                }
+              : project
+          )
+        );
+      }
       setProjectForm({ ...defaultProjectForm });
       setShowProjectModal(false);
       setSelectedProject(null);
@@ -1294,14 +1349,11 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   };
 
   const getAvailableTaskAssignees = (project = selectedProject) => {
-    const projectTeamLead = findEntity(
-      teamLeadOptions,
-      project?.teamLeadUser || project?.teamLeadEmployee
-    );
-    const projectEmployees = [
-      ...(Array.isArray(project?.employees) ? project.employees : []),
-      ...(Array.isArray(projectTeamLead?.employees) ? projectTeamLead.employees : []),
-    ];
+    const projectEmployees = Array.isArray(project?.employees)
+      ? project.employees
+      : project?.employees
+        ? [project.employees]
+        : [];
 
     return projectEmployees
       .map((employee) => {
