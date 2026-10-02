@@ -614,27 +614,25 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
     if (typeof item !== "object") return [];
 
     const candidates = [];
-    const keys = ["_id", "id", "userId", "employeeId", "teamLeadId", "uniqueID", "uuid"];
+    const keys = ["_id", "id", "userId", "userID", "employeeId", "teamLeadId", "uniqueID", "uuid"];
 
     keys.forEach((key) => {
       const value = item[key];
-      if (value !== undefined && value !== null && value !== "") {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== "" &&
+        (typeof value === "string" || typeof value === "number")
+      ) {
         candidates.push(String(value));
       }
     });
 
-    if (item.user && typeof item.user === "object") {
-      candidates.push(...getIdCandidates(item.user));
-    }
-    if (item.employee && typeof item.employee === "object") {
-      candidates.push(...getIdCandidates(item.employee));
-    }
-    if (item.teamLead && typeof item.teamLead === "object") {
-      candidates.push(...getIdCandidates(item.teamLead));
-    }
-    if (item.person && typeof item.person === "object") {
-      candidates.push(...getIdCandidates(item.person));
-    }
+    ["user", "userID", "userId", "employee", "teamLead", "person"].forEach((key) => {
+      if (item[key] && typeof item[key] === "object") {
+        candidates.push(...getIdCandidates(item[key]));
+      }
+    });
 
     return [...new Set(candidates.filter(Boolean))];
   };
@@ -914,18 +912,34 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   };
 
   const getTaskAssignedMember = (task) => {
-    const assignedId =
-      task?.assignedTo ||
-      task?.assignedEmployee ||
-      task?.assignedIntern ||
-      task?.assignedTeamLeadUser ||
-      task?.assignedTeamLeadEmployee;
+    const assigneeFields = [
+      task?.assignedTo,
+      task?.assignedEmployee,
+      task?.assignedEmployeeId,
+      task?.assignedToId,
+      task?.assignedIntern,
+      task?.assignedInternId,
+      task?.assignedTeamLeadUser,
+      task?.assignedTeamLeadEmployee,
+      task?.assignedMember,
+      task?.assignedUser,
+      task?.assignee,
+      task?.employee,
+      task?.user,
+      task?.member,
+    ];
+    const assignedId = assigneeFields.find((value) =>
+      typeof value === "string" || typeof value === "number"
+        ? Boolean(value)
+        : getIdCandidates(value).length > 0
+    );
     if (!assignedId) return null;
 
     const projectId = task?.projectId?._id || task?.projectId || task?.project?._id || task?.project;
     const project = findEntity(projects, projectId);
+    const assignedIds = new Set(getIdCandidates(assignedId));
     const assignedMember = getProjectAssignedMembers(project).find(({ member }) =>
-      isSameId(member, assignedId)
+      getIdCandidates(member).some((id) => assignedIds.has(id))
     );
 
     return assignedMember || {
@@ -1055,9 +1069,13 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
           ? projectTeamLeadEmployeeId
           : null;
       
-      const assignedEmployee = users.find(user => 
-        isSameId(user._id, assignedEmployeeId)
-      ) || employees.find(emp => isSameId(emp._id, assignedEmployeeId));
+      const assignedEmployee =
+        getAvailableTaskAssignees(taskProject).find((employee) =>
+          isSameId(employee, assignedEmployeeId)
+        ) || findEntity(employees, assignedEmployeeId);
+      const assignedToId = normalizeId(
+        assignedEmployee?.userID || assignedEmployee?.userId || assignedEmployee?.user
+      ) || assignedEmployeeId;
       
       const payload = {
         projectId: taskForm.projectId || selectedProject?._id || selectedProject?.id || null,
@@ -1067,7 +1085,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
         assignedTeamLeadUser: assignedTeamLeadUserId,
         assignedTeamLeadEmployee: assignedTeamLeadEmployeeId,
         assignedEmployee: assignedEmployeeId || null,
-        assignedTo: assignedEmployeeId || null,
+        assignedTo: assignedToId || null,
         assignedBy: taskForm.assignedBy || assignedEmployeeId || null,
         startDate: taskForm.startDate || null,
         dueDate: taskForm.dueDate || null,
@@ -1276,7 +1294,14 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
   };
 
   const getAvailableTaskAssignees = (project = selectedProject) => {
-    const projectEmployees = Array.isArray(project?.employees) ? project.employees : [];
+    const projectTeamLead = findEntity(
+      teamLeadOptions,
+      project?.teamLeadUser || project?.teamLeadEmployee
+    );
+    const projectEmployees = [
+      ...(Array.isArray(project?.employees) ? project.employees : []),
+      ...(Array.isArray(projectTeamLead?.employees) ? projectTeamLead.employees : []),
+    ];
 
     return projectEmployees
       .map((employee) => {
@@ -2503,7 +2528,7 @@ const [projectTeamMembers, setProjectTeamMembers] = useState({
                 <section className="space-y-4">
                   <div className="border-b border-slate-100 pb-2">
                     <h3 className="text-sm font-semibold text-slate-900">Assignment</h3>
-                    <p className="mt-0.5 text-xs text-slate-500">Employees are limited to the selected project team.</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Assign an employee independently; selecting a team lead is optional.</p>
                   </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Assign Team Lead</label>
